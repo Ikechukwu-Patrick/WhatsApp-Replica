@@ -13,7 +13,7 @@ import lombok.Setter;
 @AllArgsConstructor
 @NoArgsConstructor
 @Entity
-@Table(name = "messahes")
+@Table(name = "messages")
 @NamedQuery(name = MessageConstants.FIND_MESSAGE_BY_CHAT_ID,
             query = "SELECT m FROM Message m WHERE m.chat.id = :chatId ORDER BY m.createdDate")
 @NamedQuery(name = MessageConstants.SET_MESSAGES_TO_SEEN_BY_CHAT,
@@ -36,4 +36,5 @@ public class Message extends BaseAuditingEntity {
     private String senderId;
     @Column(name = "receiver_id", nullable = false)
     private String receiverId;
+    private String mediaFilePath;
 }
