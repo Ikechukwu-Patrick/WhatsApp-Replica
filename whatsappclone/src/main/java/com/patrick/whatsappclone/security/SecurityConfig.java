@@ -15,24 +15,26 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .cors(withDefaults())
-                .csrf(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(reg ->
+                .cors(withDefaults()) // Enable CORS with default configuration
+                .csrf(AbstractHttpConfigurer::disable) // Disable CSRF for stateless APIs
+                .authorizeHttpRequests(reg -> // Authorization rules
                         reg.requestMatchers(
+                                        "/v2/api-docs",
                                         "/v3/api-docs",
                                         "/v3/api-docs/**",
-                                        "/swagger-resource",
-                                        "/swagger-resource/**",
+                                        "/swagger-resources",
+                                        "/swagger-resources/**",
                                         "/configuration/ui",
+                                        "/configuration/security",
                                         "/swagger-ui/**",
                                         "/webjars/**",
-                                        "swagger-ui.htm",
-                                        "/ws/")
-                                .permitAll()
+                                        "/swagger-ui.html", // Fixed pattern with leading slash
+                                        "/ws/**")
+                                .permitAll() // Allow public access to these endpoints
                                 .anyRequest()
-                                .authenticated()
-                        )
-                .oauth2ResourceServer(auth ->
+                                .authenticated() // Require authentication for other endpoints
+                )
+                .oauth2ResourceServer(auth -> // Enable OAuth2 Resource Server
                         auth.jwt(token ->
                                 token.jwtAuthenticationConverter(new KeycloakJwtAuthenticationConverter())));
         return http.build();
