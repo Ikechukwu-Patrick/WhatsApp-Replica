@@ -20,7 +20,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:9090/realms/whatsapp-clone
+          issuer-uri: http://localhost:9090/realms/whatsapp%20clone
 
   servlet:
     multipart:
