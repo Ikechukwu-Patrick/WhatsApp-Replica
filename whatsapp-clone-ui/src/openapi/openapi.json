@@ -359,7 +359,7 @@
         "bearerFormat": "JWT",
         "flows": {
           "password": {
-            "authorizationUrl": "http://localhost:9090/realms/whatsapp%20clone/protocol/openid-connect/auth",
+            "authorizationUrl": "ttp://localhost:9090/realms/whatsapp%20clone/protocol/openid-connect/auth",
             "tokenUrl": "http://localhost:9090/realms/whatsapp%20clone/protocol/openid-connect/token",
             "scopes": {
 
