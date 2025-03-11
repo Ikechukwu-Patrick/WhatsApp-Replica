@@ -40,4 +40,4 @@ application:
 
 api_key: ${API_KEY}
 password: ${ANOTHER_PASSWORD}
-docker: DOCKER_NAME
+docker: ${DOCKER_NAME}
