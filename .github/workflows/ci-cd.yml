@@ -19,6 +19,13 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch full history to ensure `git diff` works correctly
+
+      - name: Debug Repository Structure
+        run: |
+          echo "Listing all files in the repository:"
+          ls -R
 
       - name: Set Up JDK 17
         uses: actions/setup-java@v3
