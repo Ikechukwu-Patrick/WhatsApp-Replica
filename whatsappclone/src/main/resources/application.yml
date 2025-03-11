@@ -4,7 +4,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/whatsapp_clone
     username: ${DATABASE_USERNAME}
-    password: ${DATABASE_PASSWORD=partydu@4t}
+    password: ${DATABASE_PASSWORD}
 
   jpa:
     hibernate:
@@ -38,6 +38,6 @@ application:
     uploads:
       media-output-path: ./uploads
 
-api_key: ${API_KEY}
+api_key: API_KEY
 password: ${ANOTHER_PASSWORD}
-docker: ${DOCKER_NAME}
+docker: DOCKER_NAME
