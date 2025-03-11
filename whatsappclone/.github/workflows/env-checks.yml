@@ -3,7 +3,7 @@ name: Check For New Environment Variables And If Exposed in application.yml
 on:
   pull_request:
     paths:
-      - 'src/main/resources/application.yml'  # Runs on PRs modifying application.yml
+      - '../../src/main/resources/application.yml'  # Runs on PRs modifying application.yml
   workflow_call:  # 👈 Allows this workflow to be called from ci-cd.yml
 
 jobs:
