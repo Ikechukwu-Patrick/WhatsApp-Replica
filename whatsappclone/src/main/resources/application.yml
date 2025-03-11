@@ -4,7 +4,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/whatsapp_clone
     username: ${DATABASE_USERNAME}
-    password: ${DATABASE_PASSWORD}
+    password: ${DATABASE_PASSWORD=postgres}
   jpa:
     hibernate:
       ddl-auto: update
@@ -36,3 +36,6 @@ application:
   file:
     uploads:
       media-output-path: ./uploads
+
+  docker: ${DOCKER_NAME=ike20743}
+

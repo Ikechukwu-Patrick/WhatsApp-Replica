@@ -5,17 +5,6 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="747b283e-5f77-4b0c-b787-01870b11f85d" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/git_toolbox_blame.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/whatsappclone/src/main/java/com/patrick/whatsappclone/chibuzo/Array.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/whatsappclone/src/main/java/com/patrick/whatsappclone/controller/KeycloakHealthCheckController.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/whatsappclone/src/main/resources/Banner.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/whatsappclone.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/whatsappclone.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docker-compose.yml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whatsappclone/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/whatsappclone/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whatsappclone/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/whatsappclone/pom.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whatsappclone/src/main/java/com/patrick/whatsappclone/WhatsAppCloneApiApplication.java" beforeDir="false" afterPath="$PROJECT_DIR$/whatsappclone/src/main/java/com/patrick/whatsappclone/WhatsAppCloneApiApplication.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/whatsappclone/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/whatsappclone/src/main/resources/application.yml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -207,7 +196,7 @@
       <workItem from="1741603952484" duration="33000" />
       <workItem from="1741604037758" duration="14464000" />
       <workItem from="1741630301067" duration="6012000" />
-      <workItem from="1741683715678" duration="2873000" />
+      <workItem from="1741683715678" duration="3595000" />
     </task>
     <servers />
   </component>
