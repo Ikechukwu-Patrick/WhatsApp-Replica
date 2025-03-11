@@ -4,9 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="747b283e-5f77-4b0c-b787-01870b11f85d" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/whatsappclone/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/whatsappclone/src/main/resources/application.yml" afterDir="false" />
-    </list>
+    <list default="true" id="747b283e-5f77-4b0c-b787-01870b11f85d" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -200,7 +198,7 @@
       <workItem from="1741630301067" duration="6012000" />
       <workItem from="1741683715678" duration="6522000" />
       <workItem from="1741693290620" duration="1341000" />
-      <workItem from="1741695088172" duration="18162000" />
+      <workItem from="1741695088172" duration="18480000" />
     </task>
     <servers />
   </component>
