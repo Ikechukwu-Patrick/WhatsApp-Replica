@@ -17,11 +17,11 @@ jobs:
         run: |
           echo "Current directory: $(pwd)"
           echo "Checking if application.yml exists:"
-          ls -l src/main/resources/application.yml || true
+          ls -l whatsappclone/src/main/resources/application.yml || true
 
       - name: Scan for hardcoded values
         run: |
-          FILE="src/main/resources/application.yml"  # Corrected path
+          FILE="whatsappclone/src/main/resources/application.yml"  # Corrected path
 
           if [ ! -f "$FILE" ]; then
             echo "❌ application.yml not found. Failing the job."
