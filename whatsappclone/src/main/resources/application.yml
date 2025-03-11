@@ -1,43 +1,47 @@
-spring:
-  config:
-    import: classpath:secret.properties
-  datasource:
-    url: jdbc:postgresql://localhost:5432/whatsapp_clone
-    username: ${DATABASE_USERNAME}
-    password: ${DATABASE_PASSWORD}
+name: Environment Variable Checks
 
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: false
-    properties:
-      hibernate:
-        format_sql: true
-    database: postgresql
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
+on:
+  workflow_call
 
-  flyway:
-    enabled: false
+jobs:
+  check-env-vars:
+    runs-on: ubuntu-latest
 
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: "http://localhost:9090/realms/whatsappclone"
-    jwt-secret: ${JWT_SECRET}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch full history to ensure `git diff` works correctly
 
-  servlet:
-    multipart:
-      max-file-size: 50MB
+      - name: Scan for hardcoded environment variables
+        run: |
+          FILE="whatsappclone/src/main/resources/application.yml"  # Adjust if needed
 
-springdoc:
-  default-produces-media-type: application/json
+          if [ ! -f "$FILE" ]; then
+            echo "❌ application.yml not found. Failing the job."
+            exit 1
+          fi
 
-application:
-  file:
-    uploads:
-      media-output-path: ./uploads
+          # Define keys that should not be hardcoded (sensitive values)
+          SENSITIVE_KEYS="password|secret|api[_-]?key|jwt[_-]?secret|token|access[_-]?key|private[_-]?key|client[_-]?id|client[_-]?secret|aws[_-]?secret|db[_-]?password"
 
-api_key: ${API_KEY}
-password: ${ANOTHER_PASSWORD}
-docker: ${DOCKER_NAME}
+          # Detect sensitive values that are hardcoded (excluding environment placeholders like ${VAR_NAME})
+          HARDCODED_VALUES=$(grep -E "^\s*($SENSITIVE_KEYS):\s*(\".*\"|'.*'|[^$\{][^\s]*)" "$FILE" | grep -vE "^\s*($SENSITIVE_KEYS):\s*\$\{" || true)
+
+          # Detect hardcoded default values inside placeholders (e.g., ${VAR_NAME=default_value})
+          EXPOSED_DEFAULTS=$(grep -E "\$\{[A-Za-z0-9_]+=[^}]+\}" "$FILE" || true)
+
+          # Detect non-sensitive values that are hardcoded (but ignore placeholders)
+          HARDCODED_NON_SENSITIVE=$(grep -E "^\s*[a-zA-Z0-9_\-]+:\s*(\".*\"|'.*'|[^$\{\s]+)" "$FILE" | grep -vE "^\s*($SENSITIVE_KEYS):" | grep -vE "^\s*[a-zA-Z0-9_\-]+:\s*\$\{" || true)
+
+          # If any hardcoded values are found, fail the pipeline
+          if [[ -n "$HARDCODED_VALUES" || -n "$EXPOSED_DEFAULTS" || -n "$HARDCODED_NON_SENSITIVE" ]]; then
+            echo "❌ WARNING: Hardcoded values detected in application.yml:"
+            [[ -n "$HARDCODED_VALUES" ]] && echo "❌ Hardcoded sensitive values found:" && echo "$HARDCODED_VALUES"
+            [[ -n "$EXPOSED_DEFAULTS" ]] && echo "❌ Hardcoded defaults in placeholders found:" && echo "$EXPOSED_DEFAULTS"
+            [[ -n "$HARDCODED_NON_SENSITIVE" ]] && echo "❌ Hardcoded values found for other keys:" && echo "$HARDCODED_NON_SENSITIVE"
+            echo "❌ Please use environment variables or secure secrets management!"
+            exit 1  # Fail the job
+          fi
+
+          echo "✅ No hardcoded values detected."
