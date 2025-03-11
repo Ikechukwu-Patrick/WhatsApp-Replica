@@ -22,19 +22,17 @@ jobs:
             exit 1
           fi
 
-          echo "✅ Found application.yml at: $FILE"
-
           # Define keys that should not be hardcoded (sensitive values)
           SENSITIVE_KEYS="password|secret|api[_-]?key|jwt[_-]?secret|token|access[_-]?key|private[_-]?key|client[_-]?id|client[_-]?secret|aws[_-]?secret|db[_-]?password"
 
           # Detect sensitive values that are hardcoded (excluding environment placeholders like ${VAR_NAME})
-          HARDCODED_VALUES=$(grep -E "^\s*($SENSITIVE_KEYS):\s*(\".*\"|'.*'|[^$\{][^\s]*)" "$FILE" || true)
+          HARDCODED_VALUES=$(grep -E "^\s*($SENSITIVE_KEYS):\s*(\".*\"|'.*'|[^$\{][^\s]*)" "$FILE" | grep -vE "^\s*($SENSITIVE_KEYS):\s*\$\{" || true)
 
           # Detect hardcoded default values inside placeholders (e.g., ${VAR_NAME=default_value})
           EXPOSED_DEFAULTS=$(grep -E "\$\{[A-Za-z0-9_]+=[^}]+\}" "$FILE" || true)
 
           # Detect non-sensitive values that are hardcoded (but ignore placeholders)
-          HARDCODED_NON_SENSITIVE=$(grep -E "^\s*[a-zA-Z0-9_\-]+:\s*(\".*\"|'.*'|[^$\{\s]+)" "$FILE" | grep -vE "^\s*($SENSITIVE_KEYS):" || true)
+          HARDCODED_NON_SENSITIVE=$(grep -E "^\s*[a-zA-Z0-9_\-]+:\s*(\".*\"|'.*'|[^$\{\s]+)" "$FILE" | grep -vE "^\s*($SENSITIVE_KEYS):" | grep -vE "^\s*[a-zA-Z0-9_\-]+:\s*\$\{" || true)
 
           # If any hardcoded values are found, fail the pipeline
           if [[ -n "$HARDCODED_VALUES" || -n "$EXPOSED_DEFAULTS" || -n "$HARDCODED_NON_SENSITIVE" ]]; then
