@@ -1,12 +1,10 @@
 spring:
   config:
     import: classpath:secret.properties
-
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:5432/whatsapp_clone
+    url: jdbc:postgresql://localhost:5432/whatsapp_clone
     username: ${DATABASE_USERNAME}
     password: ${DATABASE_PASSWORD}
-
   jpa:
     hibernate:
       ddl-auto: update
@@ -16,15 +14,15 @@ spring:
         format_sql: true
     database: postgresql
     database-platform: org.hibernate.dialect.PostgreSQLDialect
-
   flyway:
     enabled: false
+
 
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${OAUTH_ISSUER_URI:"http://localhost:9090/realms/whatsappclone"}
+          issuer-uri: "http://localhost:9090/realms/whatsappclone"
 
   servlet:
     multipart:
@@ -33,7 +31,8 @@ spring:
 springdoc:
   default-produces-media-type: application/json
 
+
 application:
   file:
     uploads:
-      media-output-path: ${MEDIA_OUTPUT_PATH:./uploads}
+      media-output-path: ./uploads
