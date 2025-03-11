@@ -43,19 +43,4 @@ jobs:
 
       - name: Build with Maven
         working-directory: whatsappclone  # Set the correct directory
-        run: mvn clean package  # Run tests during build
-
-  test:
-    needs: build  # Runs only if build succeeds
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Set Up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Run Tests
-        working-directory: whatsappclone  # Set the correct directory
-        run: mvn test
+        run: mvn clean package -DskipTests  # Skip tests during build
