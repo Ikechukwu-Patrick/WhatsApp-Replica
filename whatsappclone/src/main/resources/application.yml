@@ -15,19 +15,17 @@ jobs:
 
       - name: Scan for hardcoded environment variables
         run: |
-          FILE="whatsappclone/src/main/resources/application.yml"  # Adjust path if needed
+          # Dynamically locate application.yml
+          FILE=$(find . -type f -name "application.yml" | grep "src/main/resources" | head -n 1)
 
-          if [ ! -f "$FILE" ]; then
+          if [ -z "$FILE" ]; then
             echo "❌ application.yml not found. Failing the job."
             exit 1
           fi
 
           echo "✅ Found application.yml at: $FILE"
 
-          # Define sensitive keys that should NEVER be hardcoded
-          SENSITIVE_KEYS="password|secret|api[_-]?key|jwt[_-]?secret|token|access[_-]?key|private[_-]?key|client[_-]?id|client[_-]?secret|aws[_-]?secret|db[_-]?password"
-
-          # Detect new additions in application.yml (Git detects only recent changes)
+          # Ensure only changes from application.yml are checked
           NEW_VARS=$(git diff --unified=0 origin/master...HEAD -- "$FILE" | grep -E "^\+\s*[a-zA-Z0-9_\-]+:\s*.*" || true)
 
           if [ -z "$NEW_VARS" ]; then
@@ -35,7 +33,10 @@ jobs:
             exit 0
           fi
 
-          # Strict filtering: Only flag REAL hardcoded values (not placeholders like ${VAR_NAME})
+          # Define sensitive keys that should NEVER be hardcoded
+          SENSITIVE_KEYS="password|secret|api[_-]?key|jwt[_-]?secret|token|access[_-]?key|private[_-]?key|client[_-]?id|client[_-]?secret|aws[_-]?secret|db[_-]?password"
+
+          # Flag hardcoded sensitive values (but ignore placeholders like ${VAR_NAME})
           HARDCODED_VALUES=$(echo "$NEW_VARS" | grep -iE "^\+\s*($SENSITIVE_KEYS):\s*(\".*\"|'.*'|[^$\{\"]+)" || true)
 
           # Detect environment variables with default values (${VAR_NAME=default_value})
