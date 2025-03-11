@@ -1,12 +1,10 @@
-name: Check For New Environment Variables And If It Exposed in application.yml
+name: Check For New Environment Variables And If Exposed in application.yml
 
 on:
   pull_request:
     paths:
-      - 'src/main/resources/application.yml'  # Adjust path if needed
-    branches:
-      - main
-      - develop
+      - 'src/main/resources/application.yml'  # Runs on PRs modifying application.yml
+  workflow_call:  # 👈 Allows this workflow to be called from ci-cd.yml
 
 jobs:
   check-env-vars:
@@ -18,10 +16,10 @@ jobs:
       - name: Check for New Environment Variables
         run: |
           # Fetch the latest changes
-          git fetch origin main
+          git fetch origin master
           
           # Compare new vs. old version of application.yml
-          if git diff origin/main -- src/main/resources/application.yml | grep -E '^\+' | grep -E '^[A-Za-z0-9_.-]+: '; then
+          if git diff origin/master -- src/main/resources/application.yml | grep -E '^\+' | grep -E '^[A-Za-z0-9_.-]+: '; then
             echo "❌ New environment variables detected in application.yml! Review before merging."
             exit 1
           fi
