@@ -6,8 +6,9 @@
   <component name="ChangeListManager">
     <list default="true" id="747b283e-5f77-4b0c-b787-01870b11f85d" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whatsappclone/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/whatsappclone/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/whatsappclone/.github/workflows/ci-cd.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.github/workflows/ci-cd.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/whatsappclone/.github/workflows/env-checks.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.github/workflows/env-checks.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/whatsappclone/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -201,6 +202,7 @@
       <workItem from="1741604037758" duration="14464000" />
       <workItem from="1741630301067" duration="6012000" />
       <workItem from="1741683715678" duration="6522000" />
+      <workItem from="1741693290620" duration="654000" />
     </task>
     <servers />
   </component>

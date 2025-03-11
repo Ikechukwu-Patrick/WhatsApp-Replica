@@ -1,0 +1,37 @@
+name: Check For New Environment Variables And If Exposed in application.yml
+
+on:
+  pull_request:
+    paths:
+      - '../../src/main/resources/application.yml'  # Runs on PRs modifying application.yml
+  workflow_call:  # 👈 Allows this workflow to be called from ci-cd.yml
+
+jobs:
+  check-env-vars:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Check for New Environment Variables
+        run: |
+          # Fetch the latest changes
+          git fetch origin master
+          
+          # Compare new vs. old version of application.yml
+          if git diff origin/master -- src/main/resources/application.yml | grep -E '^\+' | grep -E '^[A-Za-z0-9_.-]+: '; then
+            echo "❌ New environment variables detected in application.yml! Review before merging."
+            exit 1
+          fi
+
+      - name: Check for Hardcoded Environment Variables
+        run: |
+          # Check if any environment variables have hardcoded values (not using ${VAR_NAME})
+          if grep -E '^[A-Za-z0-9_.-]+:\s*[^${]' src/main/resources/application.yml; then
+            echo "❌ Hardcoded environment variables detected! Use system environment variables instead."
+            exit 1
+          fi
+
+      - name: Success Message
+        if: success()
+        run: echo "✅ No hardcoded or new environment variables detected."
