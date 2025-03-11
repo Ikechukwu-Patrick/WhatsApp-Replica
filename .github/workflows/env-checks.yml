@@ -29,7 +29,7 @@ jobs:
           HARDCODED_VALUES=$(grep -E "^\s*($SENSITIVE_KEYS):\s*(\".*\"|'.*'|[^$\{][^\s]*)" "$FILE" | grep -vE "^\s*($SENSITIVE_KEYS):\s*\$\{" || true)
 
           # Detect hardcoded default values inside placeholders (e.g., ${VAR_NAME=default_value})
-          EXPOSED_DEFAULTS=$(grep -E "\$\{[A-Za-z0-9_]+=[^}]+\}" "$FILE" || true)
+          EXPOSED_DEFAULTS=$(grep -E "\$\{[A-Za-z0-9_]+=[^}]+\}" "$FILE" || fale)
 
           # Detect non-sensitive values that are hardcoded (but ignore placeholders)
           HARDCODED_NON_SENSITIVE=$(grep -E "^\s*[a-zA-Z0-9_\-]+:\s*(\".*\"|'.*'|[^$\{\s]+)" "$FILE" | grep -vE "^\s*($SENSITIVE_KEYS):" | grep -vE "^\s*[a-zA-Z0-9_\-]+:\s*\$\{" || true)
