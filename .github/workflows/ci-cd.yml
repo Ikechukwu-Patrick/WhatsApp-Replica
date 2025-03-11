@@ -16,6 +16,13 @@ jobs:
     needs: env-check  # Run only if env-check passes
     runs-on: ubuntu-latest
 
+    env:  # 👈 Set environment variables here
+      DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
+      DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+      DB_HOST: localhost
+      OAUTH_ISSUER_URI: "http://localhost:9090/realms/whatsappclone"
+      MEDIA_OUTPUT_PATH: ./uploads
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
