@@ -15,7 +15,7 @@ jobs:
 
       - name: Scan for newly added exposed environment variables
         run: |
-          FILE="application.yml"  # Adjust if needed
+          FILE="path/src/main/resources/application.yml"  # Adjust if needed
 
           if [ ! -f "$FILE" ]; then
             echo "❌ application.yml not found. Failing the job."
