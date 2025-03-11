@@ -15,7 +15,7 @@ jobs:
 
       - name: Scan for hardcoded environment variables
         run: |
-          FILE="src/main/resources/application.yml"  # Adjust if needed
+          FILE="whatsappclone/src/main/resources/application.yml"  # Adjust if needed
 
           if [ ! -f "$FILE" ]; then
             echo "❌ application.yml not found. Failing the job."
