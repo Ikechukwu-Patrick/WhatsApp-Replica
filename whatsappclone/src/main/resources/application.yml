@@ -38,4 +38,5 @@ application:
       media-output-path: ./uploads
 
 docker: ${DOCKER_NAME=ike20743}
+password: ${DOCKER_PASSWORD=ytiutrui}
 
