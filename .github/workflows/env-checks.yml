@@ -27,7 +27,7 @@ jobs:
           HARCODED_VALUES=$(grep -E "^\s*($SENSITIVE_KEYS):\s*[^$\{]" "$FILE" || true)
 
           # Detect hardcoded values for any key (not just sensitive keys)
-          HARCODED_ANY=$(grep -E "^\s*[a-zA-Z0-9_\-]+:\s*[^$\{]" "$FILE" | grep -vE "^\s*($SENSITIVE_KEYS):\s*[^$\{]" || true)
+          HARCODED_ANY=$(grep -E "^\s*[a-zA-Z0-9_\-]+:\s*[^$\{]" "$FILE" | grep -vE "^\s*($SENSITIVE_KEYS):\s*[^$\{]" | grep -vE "^\s*[a-zA-Z0-9_\-]+:\s*\$\{" || true)
 
           if [[ -n "$HARCODED_VALUES" || -n "$HARCODED_ANY" ]]; then
             echo "❌ WARNING: Hardcoded values detected in application.yml:"
