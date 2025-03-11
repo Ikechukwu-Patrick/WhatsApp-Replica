@@ -11,48 +11,40 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Ensure full history is available
+          fetch-depth: 0
 
-      - name: Scan for hardcoded environment variables
+      - name: Debug File Path
         run: |
-          # Dynamically locate application.yml
-          FILE=$(find . -type f -name "application.yml" | grep "src/main/resources" | head -n 1)
+          echo "Checking if application.yml exists:"
+          ls -l src/main/resources/application.yml
 
-          if [ -z "$FILE" ]; then
+      - name: Scan for hardcoded values
+        run: |
+          FILE="src/main/resources/application.yml"
+
+          if [ ! -f "$FILE" ]; then
             echo "❌ application.yml not found. Failing the job."
             exit 1
           fi
 
-          echo "✅ Found application.yml at: $FILE"
-
-          # Ensure only changes from application.yml are checked
-          NEW_VARS=$(git diff --unified=0 origin/master...HEAD -- "$FILE" | grep -E "^\+\s*[a-zA-Z0-9_\-]+:\s*.*" || true)
-
-          if [ -z "$NEW_VARS" ]; then
-            echo "✅ No new changes detected in application.yml."
-            exit 0
-          fi
-
-          # Define sensitive keys that should NEVER be hardcoded
           SENSITIVE_KEYS="password|secret|api[_-]?key|jwt[_-]?secret|token|access[_-]?key|private[_-]?key|client[_-]?id|client[_-]?secret|aws[_-]?secret|db[_-]?password"
 
-          # Flag hardcoded sensitive values (but ignore placeholders like ${VAR_NAME})
-          HARDCODED_VALUES=$(echo "$NEW_VARS" | grep -iE "^\+\s*($SENSITIVE_KEYS):\s*(\".*\"|'.*'|[^$\{\"]+)" || true)
+          # Detect hardcoded sensitive values (ignore placeholders like ${VAR_NAME})
+          HARDCODED_VALUES=$(grep -E "^\s*($SENSITIVE_KEYS):\s*(\".*\"|'.*'|[^$\{][^\s]*)" "$FILE" | grep -vE "^\s*($SENSITIVE_KEYS):\s*\$\{" || true)
 
-          # Detect environment variables with default values (${VAR_NAME=default_value})
-          EXPOSED_DEFAULTS=$(echo "$NEW_VARS" | grep -E "\$\{[A-Za-z0-9_]+=[^}]+\}" || true)
+          # Detect hardcoded defaults (e.g., ${VAR_NAME=default})
+          EXPOSED_DEFAULTS=$(grep -E "\$\{[A-Za-z0-9_]+=[^}]+\}" "$FILE" || true)
 
-          # Detect non-sensitive values that are hardcoded (but ignore placeholders like ${VAR_NAME})
-          HARDCODED_NON_SENSITIVE=$(echo "$NEW_VARS" | grep -E "^\+\s*[a-zA-Z0-9_\-]+:\s*(\".*\"|'.*'|[^$\{\s]+)" | grep -vE "^\+\s*($SENSITIVE_KEYS):" || true)
+          # Detect non-sensitive hardcoded values (ignore placeholders)
+          HARDCODED_NON_SENSITIVE=$(grep -E "^\s*[a-zA-Z0-9_\-]+:\s*(\".*\"|'.*'|[^$\{\s]+)" "$FILE" | grep -vE "^\s*($SENSITIVE_KEYS):" | grep -vE "^\s*[a-zA-Z0-9_\-]+:\s*\$\{" || true)
 
-          # Fail the pipeline only if real hardcoded values exist
           if [[ -n "$HARDCODED_VALUES" || -n "$EXPOSED_DEFAULTS" || -n "$HARDCODED_NON_SENSITIVE" ]]; then
             echo "❌ WARNING: Hardcoded values detected in application.yml:"
             [[ -n "$HARDCODED_VALUES" ]] && echo "❌ Hardcoded sensitive values found:" && echo "$HARDCODED_VALUES"
             [[ -n "$EXPOSED_DEFAULTS" ]] && echo "❌ Hardcoded defaults in placeholders found:" && echo "$EXPOSED_DEFAULTS"
             [[ -n "$HARDCODED_NON_SENSITIVE" ]] && echo "❌ Hardcoded values found for other keys:" && echo "$HARDCODED_NON_SENSITIVE"
             echo "❌ Please use environment variables or secure secrets management!"
-            exit 1  # Fail the job
+            exit 1
           fi
 
           echo "✅ No hardcoded values detected."
