@@ -37,5 +37,5 @@ application:
     uploads:
       media-output-path: ./uploads
 
-  docker: ${DOCKER_NAME=ike20743}
+docker: ${DOCKER_NAME=ike20743}
 
