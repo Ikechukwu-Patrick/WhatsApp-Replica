@@ -15,23 +15,23 @@ jobs:
 
       - name: Scan for newly added exposed environment variables
         run: |
-          FILE="src/main/resources/application.yml"  # Adjust this path if needed
+          FILE="src/main/resources/application.yml"  # Adjust if needed
 
           if [ ! -f "$FILE" ]; then
             echo "❌ application.yml not found. Skipping check."
             exit 0
           fi
 
-          # Detect new changes in application.yml
+          # Detect new additions in application.yml
           NEW_VARS=$(git diff HEAD^ -- "$FILE" | grep -E "^\+\s*[a-zA-Z0-9_\-]+:\s*.*")
 
-          # Check for hardcoded sensitive values (detects passwords, secrets, API keys)
-          EXPOSED_VALUES=$(echo "$NEW_VARS" | grep -E "^\+\s*(password|secret|api[_-]?key|jwt[_-]?secret|token):\s*[^\$\{]" || true)
+          # Flag hardcoded sensitive values (passwords, API keys, secrets, tokens)
+          EXPOSED_VALUES=$(echo "$NEW_VARS" | grep -E "^\+\s*(password|secret|api[_-]?key|jwt[_-]?secret|token):\s*(\".*\"|'.*'|[^$\{])" || true)
 
-          # Check for hardcoded default values in placeholders (e.g., ${VAR_NAME=default_value})
+          # Flag environment variables with hardcoded default values (${VAR_NAME=default})
           EXPOSED_DEFAULTS=$(echo "$NEW_VARS" | grep -E "\$\{[A-Z_]+=[^}]+\}" || true)
 
-          # Check for variables that incorrectly use `=` in value assignments
+          # Flag sensitive values improperly assigned with `=`
           EXPOSED_ASSIGNMENTS=$(echo "$NEW_VARS" | grep -E "=\s*[a-zA-Z0-9]+" || true)
 
           if [[ -n "$EXPOSED_VALUES" || -n "$EXPOSED_DEFAULTS" || -n "$EXPOSED_ASSIGNMENTS" ]]; then
