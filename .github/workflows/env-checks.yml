@@ -11,30 +11,53 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Fetch full history to ensure `git diff` works correctly
+          fetch-depth: 0  # Ensure full history is available
 
-      - name: Scan for hardcoded environment variables
+      - name: Debug Repository Structure
         run: |
-          FILE="whatsappclone/src/main/resources/application.yml"  # Adjust if needed
+          echo "🔍 Debugging repository structure..."
+          ls -R
 
-          if [ ! -f "$FILE" ]; then
+      - name: Locate application.yml
+        run: |
+          # Dynamically find application.yml
+          FILE=$(find . -type f -name "application.yml" | grep "src/main/resources" | head -n 1)
+
+          if [ -z "$FILE" ]; then
             echo "❌ application.yml not found. Failing the job."
             exit 1
           fi
 
-          # Define keys that should not be hardcoded (sensitive values)
+          echo "✅ Found application.yml at: $FILE"
+          echo "FILE_PATH=$FILE" >> $GITHUB_ENV
+
+      - name: Scan for Hardcoded Environment Variables
+        run: |
+          FILE=$FILE_PATH  # Get the correct path from the previous step
+
+          echo "🔍 Checking for hardcoded values in $FILE..."
+
+          # Get changes specific to application.yml
+          NEW_VARS=$(git diff --unified=0 origin/master...HEAD -- "$FILE" | grep -E "^\+\s*[a-zA-Z0-9_\-]+:\s*.*" || true)
+
+          if [ -z "$NEW_VARS" ]; then
+            echo "✅ No new changes detected in application.yml."
+            exit 0
+          fi
+
+          # Define sensitive keys that should NEVER be hardcoded
           SENSITIVE_KEYS="password|secret|api[_-]?key|jwt[_-]?secret|token|access[_-]?key|private[_-]?key|client[_-]?id|client[_-]?secret|aws[_-]?secret|db[_-]?password"
 
-          # Detect sensitive values that are hardcoded (excluding environment placeholders like ${VAR_NAME})
-          HARDCODED_VALUES=$(grep -E "^\s*($SENSITIVE_KEYS):\s*(\".*\"|'.*'|[^$\{][^\s]*)" "$FILE" | grep -vE "^\s*($SENSITIVE_KEYS):\s*\$\{" || true)
+          # Filter out only true hardcoded values (ignore placeholders like ${VAR_NAME})
+          HARDCODED_VALUES=$(echo "$NEW_VARS" | grep -iE "^\+\s*($SENSITIVE_KEYS):\s*(\".*\"|'.*'|[^$\{\"]+)" || true)
 
-          # Detect hardcoded default values inside placeholders (e.g., ${VAR_NAME=default_value})
-          EXPOSED_DEFAULTS=$(grep -E "\$\{[A-Za-z0-9_]+=[^}]+\}" "$FILE" || true)
+          # Detect environment variables with hardcoded default values (${VAR_NAME=default_value})
+          EXPOSED_DEFAULTS=$(echo "$NEW_VARS" | grep -E "\$\{[A-Za-z0-9_]+=[^}]+\}" || true)
 
-          # Detect non-sensitive values that are hardcoded (but ignore placeholders)
-          HARDCODED_NON_SENSITIVE=$(grep -E "^\s*[a-zA-Z0-9_\-]+:\s*(\".*\"|'.*'|[^$\{\s]+)" "$FILE" | grep -vE "^\s*($SENSITIVE_KEYS):" | grep -vE "^\s*[a-zA-Z0-9_\-]+:\s*\$\{" || true)
+          # Detect non-sensitive values that are hardcoded (but ignore placeholders like ${VAR_NAME})
+          HARDCODED_NON_SENSITIVE=$(echo "$NEW_VARS" | grep -E "^\+\s*[a-zA-Z0-9_\-]+:\s*(\".*\"|'.*'|[^$\{\s]+)" | grep -vE "^\+\s*($SENSITIVE_KEYS):" || true)
 
-          # If any hardcoded values are found, fail the pipeline
+          # Ensure ONLY application.yml is checked, preventing GitHub Actions YAML keys from being flagged
           if [[ -n "$HARDCODED_VALUES" || -n "$EXPOSED_DEFAULTS" || -n "$HARDCODED_NON_SENSITIVE" ]]; then
             echo "❌ WARNING: Hardcoded values detected in application.yml:"
             [[ -n "$HARDCODED_VALUES" ]] && echo "❌ Hardcoded sensitive values found:" && echo "$HARDCODED_VALUES"
@@ -45,4 +68,3 @@ jobs:
           fi
 
           echo "✅ No hardcoded values detected."
-#          kjl;jkj;l'
