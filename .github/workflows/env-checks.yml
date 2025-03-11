@@ -13,49 +13,28 @@ jobs:
         with:
           fetch-depth: 0  # Fetch full history to ensure `git diff` works correctly
 
-      - name: Debug Repository Structure
+      - name: Scan for hardcoded environment variables
         run: |
-          echo "Listing all files in the repository:"
-          ls -R
-
-      - name: Scan for newly added exposed environment variables
-        run: |
-          FILE="whatsappclone/src/main/resources/application.yml"  # Adjust if needed
+          FILE="src/main/resources/application.yml"  # Adjust if needed
 
           if [ ! -f "$FILE" ]; then
             echo "❌ application.yml not found. Failing the job."
             exit 1
           fi
 
-          # Detect new additions in application.yml
-          NEW_VARS=$(git diff --unified=0 origin/master...HEAD -- "$FILE" | grep -E "^\+\s*[a-zA-Z0-9_\-]+:\s*.*" || true)
-
-          if [ -z "$NEW_VARS" ]; then
-            echo "✅ No new changes detected in application.yml."
-            exit 0
-          fi
-
-          # Strict regex to detect hardcoded secrets (passwords, API keys, JWT secrets, tokens)
+          # Detect hardcoded sensitive values (e.g., passwords, secrets, API keys)
           SENSITIVE_KEYS="password|secret|api[_-]?key|jwt[_-]?secret|token|access[_-]?key|private[_-]?key|client[_-]?id|client[_-]?secret|aws[_-]?secret|db[_-]?password"
-          EXPOSED_VALUES=$(echo "$NEW_VARS" | grep -iE "^\+\s*($SENSITIVE_KEYS):\s*[^$\{]" || true)
+          HARCODED_VALUES=$(grep -E "^\s*($SENSITIVE_KEYS):\s*[^$\{]" "$FILE" || true)
 
-          # Detect environment variables with hardcoded default values (${VAR_NAME=default})
-          EXPOSED_DEFAULTS=$(echo "$NEW_VARS" | grep -E "\$\{[A-Za-z0-9_]+=[^}]+\}" || true)
+          # Detect hardcoded values for any key (not just sensitive keys)
+          HARCODED_ANY=$(grep -E "^\s*[a-zA-Z0-9_\-]+:\s*[^$\{]" "$FILE" | grep -vE "^\s*($SENSITIVE_KEYS):\s*[^$\{]" || true)
 
-          # Detect sensitive values improperly assigned with `=`
-          EXPOSED_ASSIGNMENTS=$(echo "$NEW_VARS" | grep -E "^\+\s*($SENSITIVE_KEYS)\s*=\s*[a-zA-Z0-9]+" || true)
-
-          # Check for hardcoded environment variables (e.g., VAR_NAME: value instead of VAR_NAME: ${VAR_NAME})
-          HARCODED_VARS=$(echo "$NEW_VARS" | grep -E "^\+\s*[a-zA-Z0-9_\-]+:\s*[^$\{]" | grep -vE "^\+\s*($SENSITIVE_KEYS):" || true)
-
-          if [[ -n "$EXPOSED_VALUES" || -n "$EXPOSED_DEFAULTS" || -n "$EXPOSED_ASSIGNMENTS" || -n "$HARCODED_VARS" ]]; then
-            echo "❌ WARNING: Exposed environment variables detected in application.yml:"
-            [[ -n "$EXPOSED_VALUES" ]] && echo "❌ Hardcoded sensitive values found:" && echo "$EXPOSED_VALUES"
-            [[ -n "$EXPOSED_DEFAULTS" ]] && echo "❌ Hardcoded defaults in placeholders found:" && echo "$EXPOSED_DEFAULTS"
-            [[ -n "$EXPOSED_ASSIGNMENTS" ]] && echo "❌ Invalid assignments using '=' found:" && echo "$EXPOSED_ASSIGNMENTS"
-            [[ -n "$HARCODED_VARS" ]] && echo "❌ Hardcoded environment variables found:" && echo "$HARCODED_VARS"
+          if [[ -n "$HARCODED_VALUES" || -n "$HARCODED_ANY" ]]; then
+            echo "❌ WARNING: Hardcoded values detected in application.yml:"
+            [[ -n "$HARCODED_VALUES" ]] && echo "❌ Hardcoded sensitive values found:" && echo "$HARCODED_VALUES"
+            [[ -n "$HARCODED_ANY" ]] && echo "❌ Hardcoded values found for other keys:" && echo "$HARCODED_ANY"
             echo "❌ Please use environment variables or secure secrets management!"
             exit 1  # Fail the job
           fi
 
-          echo "✅ No exposed environment variables detected."
+          echo "✅ No hardcoded values detected."
