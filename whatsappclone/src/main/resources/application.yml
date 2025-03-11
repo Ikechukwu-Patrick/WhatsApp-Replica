@@ -11,11 +11,18 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Fetch full history to ensure `git diff` works correctly
+          fetch-depth: 0
+
+      - name: Debug Repository Structure
+        run: |
+          echo "Current directory: $(pwd)"
+          ls -R
+          echo "Checking if application.yml exists:"
+          ls -l whatsappclone/src/main/resources/application.yml
 
       - name: Scan for hardcoded environment variables
         run: |
-          FILE="whatsappclone/src/main/resources/application.yml"  # Adjust if needed
+          FILE="whatsappclone/src/main/resources/application.yml"  # Verify this path
 
           if [ ! -f "$FILE" ]; then
             echo "❌ application.yml not found. Failing the job."
@@ -25,23 +32,22 @@ jobs:
           # Define keys that should not be hardcoded (sensitive values)
           SENSITIVE_KEYS="password|secret|api[_-]?key|jwt[_-]?secret|token|access[_-]?key|private[_-]?key|client[_-]?id|client[_-]?secret|aws[_-]?secret|db[_-]?password"
 
-          # Detect sensitive values that are hardcoded (excluding environment placeholders like ${VAR_NAME})
+          # Detect hardcoded sensitive values (ignore placeholders like ${VAR_NAME})
           HARDCODED_VALUES=$(grep -E "^\s*($SENSITIVE_KEYS):\s*(\".*\"|'.*'|[^$\{][^\s]*)" "$FILE" | grep -vE "^\s*($SENSITIVE_KEYS):\s*\$\{" || true)
 
-          # Detect hardcoded default values inside placeholders (e.g., ${VAR_NAME=default_value})
+          # Detect hardcoded defaults (e.g., ${VAR_NAME=default})
           EXPOSED_DEFAULTS=$(grep -E "\$\{[A-Za-z0-9_]+=[^}]+\}" "$FILE" || true)
 
-          # Detect non-sensitive values that are hardcoded (but ignore placeholders)
+          # Detect non-sensitive hardcoded values (ignore placeholders)
           HARDCODED_NON_SENSITIVE=$(grep -E "^\s*[a-zA-Z0-9_\-]+:\s*(\".*\"|'.*'|[^$\{\s]+)" "$FILE" | grep -vE "^\s*($SENSITIVE_KEYS):" | grep -vE "^\s*[a-zA-Z0-9_\-]+:\s*\$\{" || true)
 
-          # If any hardcoded values are found, fail the pipeline
           if [[ -n "$HARDCODED_VALUES" || -n "$EXPOSED_DEFAULTS" || -n "$HARDCODED_NON_SENSITIVE" ]]; then
             echo "❌ WARNING: Hardcoded values detected in application.yml:"
             [[ -n "$HARDCODED_VALUES" ]] && echo "❌ Hardcoded sensitive values found:" && echo "$HARDCODED_VALUES"
             [[ -n "$EXPOSED_DEFAULTS" ]] && echo "❌ Hardcoded defaults in placeholders found:" && echo "$EXPOSED_DEFAULTS"
             [[ -n "$HARDCODED_NON_SENSITIVE" ]] && echo "❌ Hardcoded values found for other keys:" && echo "$HARDCODED_NON_SENSITIVE"
             echo "❌ Please use environment variables or secure secrets management!"
-            exit 1  # Fail the job
+            exit 1
           fi
 
           echo "✅ No hardcoded values detected."
