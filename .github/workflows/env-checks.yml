@@ -15,23 +15,31 @@ jobs:
 
       - name: Scan for newly added exposed environment variables
         run: |
-          FILE="src/main/resources/application.yml"  # Adjust if needed
+          FILE="src/main/resources/application.yml"  # Adjust this path if needed
 
           if [ ! -f "$FILE" ]; then
             echo "❌ application.yml not found. Skipping check."
             exit 0
           fi
 
-          # Find new variables added in application.yml
-          NEW_VARS=$(git diff HEAD^ -- "$FILE" | grep -E "^\+\s*[a-zA-Z0-9_]+:\s*.*")
+          # Detect new changes in application.yml
+          NEW_VARS=$(git diff HEAD^ -- "$FILE" | grep -E "^\+\s*[a-zA-Z0-9_\-]+:\s*.*")
 
-          # Check for variables that have hardcoded defaults (e.g., ${VAR_NAME=default})
-          EXPOSED_DEFAULTS=$(echo "$NEW_VARS" | grep -E "\$\{[A-Z_]+=[^}]+\}")
+          # Check for hardcoded sensitive values (detects passwords, secrets, API keys)
+          EXPOSED_VALUES=$(echo "$NEW_VARS" | grep -E "^\+\s*(password|secret|api[_-]?key|jwt[_-]?secret|token):\s*[^\$\{]" || true)
 
-          if [[ -n "$EXPOSED_DEFAULTS" ]]; then
-            echo "❌ WARNING: Hardcoded default values detected in environment variables:"
-            echo "$EXPOSED_DEFAULTS"
-            echo "❌ Avoid using hardcoded defaults. Use secure environment variables instead."
+          # Check for hardcoded default values in placeholders (e.g., ${VAR_NAME=default_value})
+          EXPOSED_DEFAULTS=$(echo "$NEW_VARS" | grep -E "\$\{[A-Z_]+=[^}]+\}" || true)
+
+          # Check for variables that incorrectly use `=` in value assignments
+          EXPOSED_ASSIGNMENTS=$(echo "$NEW_VARS" | grep -E "=\s*[a-zA-Z0-9]+" || true)
+
+          if [[ -n "$EXPOSED_VALUES" || -n "$EXPOSED_DEFAULTS" || -n "$EXPOSED_ASSIGNMENTS" ]]; then
+            echo "❌ WARNING: Exposed environment variables detected in application.yml:"
+            [[ -n "$EXPOSED_VALUES" ]] && echo "❌ Hardcoded sensitive values found:" && echo "$EXPOSED_VALUES"
+            [[ -n "$EXPOSED_DEFAULTS" ]] && echo "❌ Hardcoded defaults in placeholders found:" && echo "$EXPOSED_DEFAULTS"
+            [[ -n "$EXPOSED_ASSIGNMENTS" ]] && echo "❌ Invalid assignments using '=' found:" && echo "$EXPOSED_ASSIGNMENTS"
+            echo "❌ Please use environment variables or secure secrets management!"
             exit 1  # Fail the job
           fi
 

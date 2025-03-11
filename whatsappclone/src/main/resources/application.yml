@@ -4,7 +4,8 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/whatsapp_clone
     username: ${DATABASE_USERNAME}
-    password: ${DATABASE_PASSWORD}
+    password: myhardcodedpassword
+
   jpa:
     hibernate:
       ddl-auto: update
@@ -14,15 +15,16 @@ spring:
         format_sql: true
     database: postgresql
     database-platform: org.hibernate.dialect.PostgreSQLDialect
+
   flyway:
     enabled: false
-
 
   security:
     oauth2:
       resourceserver:
         jwt:
           issuer-uri: "http://localhost:9090/realms/whatsappclone"
+    jwt-secret: hardcoded-jwt-secret
 
   servlet:
     multipart:
@@ -31,15 +33,11 @@ spring:
 springdoc:
   default-produces-media-type: application/json
 
-
 application:
   file:
     uploads:
       media-output-path: ./uploads
 
-#password: DOCKER_PASSWORD=ytiutrui
-password: mypassword
-jwt-secret: myjwtsecret
+api_key: 123456789abcdef
+password: anotherhardcodedpassword
 docker: ${DOCKER_NAME=ike20743}
-
-
