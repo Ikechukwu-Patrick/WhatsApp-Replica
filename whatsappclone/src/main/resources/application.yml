@@ -1,6 +1,6 @@
 spring:
   config:
-    import: classpath:../../../secret.properties
+    import: classpath:secret.properties
   datasource:
     url: jdbc:postgresql://localhost:5432/whatsapp_clone
     username: ${DATABASE_USERNAME}
@@ -22,7 +22,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:9090/realms/whatsapp%20clone
+          issuer-uri: "http://localhost:9090/realms/whatsappclone"
 
   servlet:
     multipart:

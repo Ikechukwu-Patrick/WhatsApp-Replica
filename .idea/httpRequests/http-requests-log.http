@@ -1,0 +1,127 @@
+# @no-cookie-jar
+GET http://localhost:8080/healthCheck/keycloak
+User-Agent: IntelliJ HTTP Client/IntelliJ IDEA 2024.3.2.2
+Accept-Encoding: br, deflate, gzip, x-gzip
+Accept: */*
+
+###
+
+# @no-cookie-jar
+GET http://localhost:8080/healthCheck/keycloak
+User-Agent: IntelliJ HTTP Client/IntelliJ IDEA 2024.3.2.2
+Accept-Encoding: br, deflate, gzip, x-gzip
+Accept: */*
+
+###
+
+# @no-cookie-jar
+GET http://localhost:8080/healthCheck/keycloak
+User-Agent: IntelliJ HTTP Client/IntelliJ IDEA 2024.3.2.2
+Accept-Encoding: br, deflate, gzip, x-gzip
+Accept: */*
+
+###
+
+GET http://localhost:8080/healthCheck/keycloak
+User-Agent: IntelliJ HTTP Client/IntelliJ IDEA 2024.3.2.2
+Accept-Encoding: br, deflate, gzip, x-gzip
+Accept: */*
+Cookie: JSESSIONID=E7DDFA3C5F1F7345B66A4BFD21170920
+
+###
+
+GET http://localhost:8080/healthCheck/keycloak
+User-Agent: IntelliJ HTTP Client/IntelliJ IDEA 2024.3.2.2
+Accept-Encoding: br, deflate, gzip, x-gzip
+Accept: */*
+Cookie: JSESSIONID=E7DDFA3C5F1F7345B66A4BFD21170920
+
+###
+
+# @no-cookie-jar
+GET http://localhost:8080/healthCheck/keycloak
+User-Agent: IntelliJ HTTP Client/IntelliJ IDEA 2024.3.2.2
+Accept-Encoding: br, deflate, gzip, x-gzip
+Accept: */*
+
+###
+
+# @no-cookie-jar
+GET http://localhost:8080/healthCheck/keycloak
+User-Agent: IntelliJ HTTP Client/IntelliJ IDEA 2024.3.2.2
+Accept-Encoding: br, deflate, gzip, x-gzip
+Accept: */*
+
+###
+
+# @no-cookie-jar
+GET http://localhost:8080/healthCheck/keycloak
+User-Agent: IntelliJ HTTP Client/IntelliJ IDEA 2024.3.2.2
+Accept-Encoding: br, deflate, gzip, x-gzip
+Accept: */*
+
+###
+
+# @no-cookie-jar
+GET http://localhost:8080/healthCheck/keycloak
+User-Agent: IntelliJ HTTP Client/IntelliJ IDEA 2024.3.2.2
+Accept-Encoding: br, deflate, gzip, x-gzip
+Accept: */*
+
+###
+
+# @no-cookie-jar
+GET http://localhost:8080/healthCheck/keycloak
+User-Agent: IntelliJ HTTP Client/IntelliJ IDEA 2024.3.2.2
+Accept-Encoding: br, deflate, gzip, x-gzip
+Accept: */*
+
+###
+
+GET http://localhost:8080/healthCheck/keycloak
+User-Agent: IntelliJ HTTP Client/IntelliJ IDEA 2024.3.2.2
+Accept-Encoding: br, deflate, gzip, x-gzip
+Accept: */*
+Cookie: JSESSIONID=E7DDFA3C5F1F7345B66A4BFD21170920
+
+###
+
+GET http://localhost:8080/healthCheck/keycloak
+User-Agent: IntelliJ HTTP Client/IntelliJ IDEA 2024.3.2.2
+Accept-Encoding: br, deflate, gzip, x-gzip
+Accept: */*
+Cookie: JSESSIONID=CA6B75A672F84CBACB93C9C64CD48115
+
+###
+
+GET http://localhost:8080/healthCheck/keycloak
+User-Agent: IntelliJ HTTP Client/IntelliJ IDEA 2024.3.2.2
+Accept-Encoding: br, deflate, gzip, x-gzip
+Accept: */*
+Cookie: JSESSIONID=CA6B75A672F84CBACB93C9C64CD48115
+
+###
+
+GET http://localhost:8080/healthCheck/keycloak
+User-Agent: IntelliJ HTTP Client/IntelliJ IDEA 2024.3.2.2
+Accept-Encoding: br, deflate, gzip, x-gzip
+Accept: */*
+Cookie: JSESSIONID=CA6B75A672F84CBACB93C9C64CD48115
+
+###
+
+GET http://localhost:8080/api/v1/users
+User-Agent: IntelliJ HTTP Client/IntelliJ IDEA 2024.3.2.2
+Accept-Encoding: br, deflate, gzip, x-gzip
+Accept: */*
+Cookie: JSESSIONID=CA6B75A672F84CBACB93C9C64CD48115
+
+###
+
+GET http://localhost:8080/healthCheck/keycloak
+User-Agent: IntelliJ HTTP Client/IntelliJ IDEA 2024.3.2.2
+Accept-Encoding: br, deflate, gzip, x-gzip
+Accept: */*
+
+###
+
