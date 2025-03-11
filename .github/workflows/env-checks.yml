@@ -8,24 +8,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository and Submodules
+      - name: Checkout Repository
         uses: actions/checkout@v3
         with:
           fetch-depth: 0  # Fetch full history to ensure `git diff` works correctly
-          submodules: true  # Initialize and update submodules
 
-      - name: Debug Submodule Structure
+      - name: Debug Repository Structure
         run: |
-          echo "Listing all files in the submodule:"
-          cd path/src/main/resources/application.yml/submodule  # Replace with the path to your submodule
+          echo "Listing all files in the repository:"
           ls -R
 
       - name: Scan for newly added exposed environment variables
         run: |
-          FILE="submodule/src/main/resources/application.yml"  # Adjust if needed
+          FILE="src/main/resources/application.yml"  # Adjust if needed
 
           if [ ! -f "$FILE" ]; then
-            echo "❌ application.yml not found in submodule. Failing the job."
+            echo "❌ application.yml not found. Failing the job."
             exit 1
           fi
 
