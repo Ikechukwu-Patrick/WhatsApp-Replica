@@ -11,7 +11,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 2  # Fetch last commit for comparison
+          fetch-depth: 0  # Fetch full history to ensure `git diff` works correctly
 
       - name: Scan for newly added exposed environment variables
         run: |
@@ -23,15 +23,15 @@ jobs:
           fi
 
           # Detect new additions in application.yml
-          NEW_VARS=$(git diff HEAD^ -- "$FILE" | grep -E "^\+\s*[a-zA-Z0-9_\-]+:\s*.*")
+          NEW_VARS=$(git diff --unified=0 HEAD^ -- "$FILE" | grep -E "^\+\s*[a-zA-Z0-9_\-]+:\s*.*" || true)
 
-          # Flag hardcoded sensitive values (passwords, API keys, secrets, tokens)
-          EXPOSED_VALUES=$(echo "$NEW_VARS" | grep -E "^\+\s*(password|secret|api[_-]?key|jwt[_-]?secret|token):\s*(\".*\"|'.*'|[^$\{])" || true)
+          # Strict regex to detect hardcoded secrets (passwords, API keys, JWT secrets, tokens)
+          EXPOSED_VALUES=$(echo "$NEW_VARS" | grep -iE "^\+\s*(password|secret|api[_-]?key|jwt[_-]?secret|token|access[_-]?key|private[_-]?key|client[_-]?id|client[_-]?secret|aws[_-]?secret|db[_-]?password):\s*[^$\{]" || true)
 
-          # Flag environment variables with hardcoded default values (${VAR_NAME=default})
+          # Detect environment variables with hardcoded default values (${VAR_NAME=default})
           EXPOSED_DEFAULTS=$(echo "$NEW_VARS" | grep -E "\$\{[A-Z_]+=[^}]+\}" || true)
 
-          # Flag sensitive values improperly assigned with `=`
+          # Detect sensitive values improperly assigned with `=`
           EXPOSED_ASSIGNMENTS=$(echo "$NEW_VARS" | grep -E "=\s*[a-zA-Z0-9]+" || true)
 
           if [[ -n "$EXPOSED_VALUES" || -n "$EXPOSED_DEFAULTS" || -n "$EXPOSED_ASSIGNMENTS" ]]; then
