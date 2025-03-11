@@ -22,17 +22,26 @@ jobs:
             exit 1
           fi
 
-          # Detect hardcoded sensitive values (e.g., passwords, secrets, API keys)
+          echo "✅ Found application.yml at: $FILE"
+
+          # Define keys that should not be hardcoded (sensitive values)
           SENSITIVE_KEYS="password|secret|api[_-]?key|jwt[_-]?secret|token|access[_-]?key|private[_-]?key|client[_-]?id|client[_-]?secret|aws[_-]?secret|db[_-]?password"
-          HARCODED_VALUES=$(grep -E "^\s*($SENSITIVE_KEYS):\s*[^$\{]" "$FILE" || true)
 
-          # Detect hardcoded values for any key (not just sensitive keys)
-          HARCODED_ANY=$(grep -E "^\s*[a-zA-Z0-9_\-]+:\s*[^$\{]" "$FILE" | grep -vE "^\s*($SENSITIVE_KEYS):\s*[^$\{]" | grep -vE "^\s*[a-zA-Z0-9_\-]+:\s*\$\{" || true)
+          # Detect sensitive values that are hardcoded (excluding environment placeholders like ${VAR_NAME})
+          HARDCODED_VALUES=$(grep -E "^\s*($SENSITIVE_KEYS):\s*(\".*\"|'.*'|[^$\{][^\s]*)" "$FILE" || true)
 
-          if [[ -n "$HARCODED_VALUES" || -n "$HARCODED_ANY" ]]; then
+          # Detect hardcoded default values inside placeholders (e.g., ${VAR_NAME=default_value})
+          EXPOSED_DEFAULTS=$(grep -E "\$\{[A-Za-z0-9_]+=[^}]+\}" "$FILE" || true)
+
+          # Detect non-sensitive values that are hardcoded (but ignore placeholders)
+          HARDCODED_NON_SENSITIVE=$(grep -E "^\s*[a-zA-Z0-9_\-]+:\s*(\".*\"|'.*'|[^$\{\s]+)" "$FILE" | grep -vE "^\s*($SENSITIVE_KEYS):" || true)
+
+          # If any hardcoded values are found, fail the pipeline
+          if [[ -n "$HARDCODED_VALUES" || -n "$EXPOSED_DEFAULTS" || -n "$HARDCODED_NON_SENSITIVE" ]]; then
             echo "❌ WARNING: Hardcoded values detected in application.yml:"
-            [[ -n "$HARCODED_VALUES" ]] && echo "❌ Hardcoded sensitive values found:" && echo "$HARCODED_VALUES"
-            [[ -n "$HARCODED_ANY" ]] && echo "❌ Hardcoded values found for other keys:" && echo "$HARCODED_ANY"
+            [[ -n "$HARDCODED_VALUES" ]] && echo "❌ Hardcoded sensitive values found:" && echo "$HARDCODED_VALUES"
+            [[ -n "$EXPOSED_DEFAULTS" ]] && echo "❌ Hardcoded defaults in placeholders found:" && echo "$EXPOSED_DEFAULTS"
+            [[ -n "$HARDCODED_NON_SENSITIVE" ]] && echo "❌ Hardcoded values found for other keys:" && echo "$HARDCODED_NON_SENSITIVE"
             echo "❌ Please use environment variables or secure secrets management!"
             exit 1  # Fail the job
           fi
