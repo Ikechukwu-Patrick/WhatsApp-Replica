@@ -48,11 +48,17 @@ jobs:
           # Flag default values inside placeholders (e.g., ${VAR_NAME=default_value} or ${VAR_NAME:default_value})
           EXPOSED_DEFAULTS=$(echo "$NEW_VARS" | grep -E "\$\{[A-Za-z0-9_]+[:=][^}]+\}" || true)
 
-          # Detect non-sensitive values that are hardcoded (ignore placeholders like ${VAR_NAME})
-          HARDCODED_NON_SENSITIVE=$(echo "$NEW_VARS" | grep -E "^\+\s*[a-zA-Z0-9_\-]+:\s*(?!\$\{)[^\s]+" | grep -vE "^\+\s*($SENSITIVE_KEYS):" || true)
+          # Detect non-sensitive hardcoded values (e.g., `docker: DOCKER_NAME`)
+          HARDCODED_NON_SENSITIVE=$(echo "$NEW_VARS" | grep -E "^\+\s*[a-zA-Z0-9_\-]+:\s*[^$\{\s]+" | grep -vE "^\+\s*($SENSITIVE_KEYS):" || true)
 
           # Fail if any hardcoded values exist
           if [[ -n "$HARDCODED_VALUES" || -n "$EXPOSED_DEFAULTS" || -n "$HARDCODED_NON_SENSITIVE" ]]; then
             echo "❌ WARNING: Hardcoded values detected in application.yml:"
             [[ -n "$HARDCODED_VALUES" ]] && echo "❌ Hardcoded sensitive values found:" && echo "$HARDCODED_VALUES"
-            [[ -n "$EXPOSED_DEFAULTS" ]] && echo "❌ Hardc
+            [[ -n "$EXPOSED_DEFAULTS" ]] && echo "❌ Hardcoded defaults in placeholders found:" && echo "$EXPOSED_DEFAULTS"
+            [[ -n "$HARDCODED_NON_SENSITIVE" ]] && echo "❌ Hardcoded values found for other keys:" && echo "$HARDCODED_NON_SENSITIVE"
+            echo "❌ Please use environment variables or secure secrets management!"
+            exit 1  # Fail the job
+          fi
+
+          echo "✅ No hardcoded values detected."
