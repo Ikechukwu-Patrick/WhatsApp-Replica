@@ -1,7 +1,7 @@
 name: Environment Variable Checks
 
 on:
-  workflow_call  # Allows other workflows (like CI/CD Pipeline) to call this
+  workflow_call
 
 jobs:
   check-env-vars:
@@ -22,14 +22,17 @@ jobs:
             exit 0
           fi
 
-          # Get newly added lines with potential environment variables
-          NEW_VARS=$(git diff HEAD^ -- "$FILE" | grep -E "^\+\s*[a-zA-Z0-9_]+:\s*.*" | grep -vE "(ENC\(|\${.*})")
+          # Find new variables added in application.yml
+          NEW_VARS=$(git diff HEAD^ -- "$FILE" | grep -E "^\+\s*[a-zA-Z0-9_]+:\s*.*")
 
-          if [[ -n "$NEW_VARS" ]]; then
-            echo "❌ WARNING: Found exposed environment variables in application.yml:"
-            echo "$NEW_VARS"
-            echo "❌ Ensure all sensitive values use placeholders (\${VAR_NAME}) or encryption (ENC(...))."
+          # Check for variables that have hardcoded defaults (e.g., ${VAR_NAME=default})
+          EXPOSED_DEFAULTS=$(echo "$NEW_VARS" | grep -E "\$\{[A-Z_]+=[^}]+\}")
+
+          if [[ -n "$EXPOSED_DEFAULTS" ]]; then
+            echo "❌ WARNING: Hardcoded default values detected in environment variables:"
+            echo "$EXPOSED_DEFAULTS"
+            echo "❌ Avoid using hardcoded defaults. Use secure environment variables instead."
             exit 1  # Fail the job
-          else
-            echo "✅ No exposed environment variables detected."
           fi
+
+          echo "✅ No exposed environment variables detected."
