@@ -41,3 +41,5 @@ application:
 api_key: 123456789abcdef
 password: anotherhardcodedpassword
 docker: ${DOCKER_NAME=ike20743}
+
+uihoijpok: ojpjp
