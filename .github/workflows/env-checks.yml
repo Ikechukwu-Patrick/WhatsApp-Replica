@@ -2,24 +2,26 @@ name: Check for Hardcoded Environment Variables
 
 on:
   pull_request:
-    branches: [ master ]  # 👈 Trigger on pull requests to the 'master' branch
+    branches: [ master ]
   push:
-    branches: [ master ]  # 👈 Trigger on pushes to the 'master' branch
+    branches: [ master ]
 
 jobs:
   check-env-vars:
-    runs-on: ubuntu-latest  # 👈 Run on the latest Ubuntu runner
-
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3  # 👈 Check out the repository
+        uses: actions/checkout@v3
         with:
-          fetch-depth: 2  # 👈 Fetch the last 2 commits for `git diff` comparison
+          fetch-depth: 2  # Fetch the last 2 commits for debugging
 
       - name: Check for Hardcoded Values in application.properties
         run: |
           # Check application.properties for hardcoded values
-          if git diff HEAD^ HEAD -- application.properties | grep '^+' | grep -E '^\+[^#]*=' | grep -v '=\s*\${'; then
+          if grep -E '^[^#]*=' application.properties | grep -v '=\s*\${'; then
             echo "::error::Hardcoded values detected in application.properties. Use placeholders (e.g., \${VAR})."
+            grep -E '^[^#]*=' application.properties | grep -v '=\s*\${'  # Show the offending lines
             exit 1
+          else
+            echo "No hardcoded values found in application.properties. Good job, engineers! 🎉"
           fi
