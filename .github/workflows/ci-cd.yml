@@ -10,17 +10,33 @@ on:
 
 jobs:
   env-check:
-    uses: ./.github/workflows/env-checks.yml  # 👈 Calls env-checks.yml
-
-  build:
-    needs: env-check  # Run only if env-check passes
+    name: Check for Hardcoded Environment Variables
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Fetch full history to ensure `git diff` works correctly
+          fetch-depth: 2  # Fetch the last 2 commits for `git diff` comparison
+
+      - name: Check for Hardcoded Values in application.properties
+        run: |
+          # Check application.properties for hardcoded values
+          if git diff HEAD^ HEAD -- application.properties | grep '^+' | grep -E '^\+[^#]*=' | grep -v '=\s*\${'; then
+            echo "::error::Hardcoded values detected in application.properties. Use placeholders (e.g., \${VAR})."
+            exit 1
+          else
+            echo "No hardcoded values found in application.properties. Good job, engineers! 🎉"
+          fi
+
+  build:
+    name: Build Application
+    needs: env-check  # 👈 Run only if env-check passes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch full history for debugging or other steps
 
       - name: Debug Repository Structure
         run: |
