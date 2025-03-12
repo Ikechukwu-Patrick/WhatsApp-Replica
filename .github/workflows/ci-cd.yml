@@ -20,13 +20,22 @@ jobs:
 
       - name: Check for Hardcoded Values in application.properties
         run: |
+          # Define the path to application.properties
+          PROPERTIES_FILE="src/main/resources/application.properties"
+
+          # Check if the file exists
+          if [ ! -f "$PROPERTIES_FILE" ]; then
+            echo "::error::File $PROPERTIES_FILE not found. Please check the path."
+            exit 1
+          fi
+
           # Check application.properties for hardcoded values
-          if grep -E '^[^#]*=' application.properties | grep -v '=\s*\${'; then
-            echo "::error::Hardcoded values detected in application.properties. Use placeholders (e.g., \${VAR})."
-            grep -E '^[^#]*=' application.properties | grep -v '=\s*\${'  # Show the offending lines
+          if grep -E '^[^#]*=' "$PROPERTIES_FILE" | grep -v '=\s*\${'; then
+            echo "::error::Hardcoded values detected in $PROPERTIES_FILE. Use placeholders (e.g., \${VAR})."
+            grep -E '^[^#]*=' "$PROPERTIES_FILE" | grep -v '=\s*\${'  # Show the offending lines
             exit 1
           else
-            echo "No hardcoded values found in application.properties. Good job, engineers! 🎉"
+            echo "No hardcoded values found in $PROPERTIES_FILE. Good job, engineers! 🎉"
           fi
 
   build:
