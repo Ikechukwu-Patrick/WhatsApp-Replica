@@ -5,6 +5,7 @@ spring:
     url: jdbc:postgresql://localhost:5432/whatsapp_clone
     username: ${DATABASE_USERNAME}
     password: ${DATABASE_PASSWORD}
+    ddl_changes: ${DDL_CHANGES}
   jpa:
     hibernate:
       ddl-auto: update
