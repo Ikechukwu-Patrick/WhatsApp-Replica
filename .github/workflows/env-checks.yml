@@ -1,4 +1,4 @@
-name: Check for Hardcoded Environment Variables
+name: Check for Hardcoded Environment Variables and Build
 
 on:
   pull_request:
@@ -13,15 +13,96 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Fetch the last 2 commits for debugging
+          fetch-depth: 2  # Fetch the last 2 commits for debugging
 
       - name: Check for Hardcoded Values in application.properties
         run: |
-          # Check application.properties for hardcoded values
-          if grep -E '^[^#]=' application.properties | grep -v '=\s\${'; then
-            echo "::error::Hardcoded values detected in application.properties. Use placeholders (e.g., \${VAR})."
-            grep -E '^[^#]=' application.properties | grep -v '=\s\${'  # Show the offending lines
+          # Define the path to application.properties
+          PROPERTIES_FILE="whatsappclone/src/main/resources/application.properties"
+
+          # Check if the file exists
+          if [ ! -f "$PROPERTIES_FILE" ]; then
+            echo "::error::File $PROPERTIES_FILE not found. Please check the path."
+            exit 1
+          fi
+
+          # List of keys to skip (non-sensitive configurations)
+          SKIP_KEYS=(
+            "spring.config.import"
+            "spring.datasource.url"
+            "spring.jpa.hibernate.ddl-auto"
+            "spring.jpa.show-sql"
+            "spring.jpa.properties.hibernate.format_sql"
+            "spring.jpa.database"
+            "spring.jpa.database-platform"
+            "spring.flyway.enabled"
+            "spring.security.oauth2.resourceserver.jwt.issuer-uri"
+            "spring.servlet.multipart.max-file-size"
+            "springdoc.default-produces-media-type"
+            "application.file.uploads.media-output-path"
+          )
+
+          # Check for hardcoded values (lines that contain '=' but do not use '${}')
+          HARDCODED_VALUES=$(grep -E '^[^#]*=' "$PROPERTIES_FILE" | grep -v '=\s*\${')
+
+          # Filter out skipped keys
+          FILTERED_VALUES=$(echo "$HARDCODED_VALUES" | grep -vFf <(printf "%s\n" "${SKIP_KEYS[@]}"))
+
+          # If hardcoded values are found, fail the workflow
+          if [ -n "$FILTERED_VALUES" ]; then
+            echo "::error::Hardcoded values detected in $PROPERTIES_FILE. Use placeholders (e.g., \${VAR})."
+            echo "$FILTERED_VALUES"  # Show the offending lines
             exit 1
           else
-            echo "No hardcoded values found in application.properties. Good job, engineers! 🎉"
+            echo "No hardcoded values found in $PROPERTIES_FILE. Good job, engineers! 🎉"
           fi
+
+      - name: Ensure Environment Variables Are Uppercase
+        run: |
+          # Define the path to application.properties
+          PROPERTIES_FILE="whatsappclone/src/main/resources/application.properties"
+
+          # Check if the file exists
+          if [ ! -f "$PROPERTIES_FILE" ]; then
+            echo "::error::File $PROPERTIES_FILE not found. Please check the path."
+            exit 1
+          fi
+
+          # Check for environment variables that are not in uppercase
+          INVALID_VARS=$(grep -oP '\$\{\K[^}]+' "$PROPERTIES_FILE" | grep -v '^[A-Z0-9_]*$')
+
+          # If invalid variables are found, fail the workflow
+          if [ -n "$INVALID_VARS" ]; then
+            echo "::error::Invalid environment variables detected in $PROPERTIES_FILE. Use uppercase letters only (e.g., \${VAR})."
+            echo "$INVALID_VARS"  # Show the offending variables
+            exit 1
+          else
+            echo "All environment variables are in uppercase. Good job, engineers! 🎉"
+          fi
+
+  build:
+    name: Build Application
+    needs: check-env-vars  # 👈 Run only if check-env-vars passes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch full history for debugging or other steps
+
+      - name: Set Up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Cache Maven Dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Build with Maven
+        run: mvn clean package -DskipTests  # Skip tests during build
