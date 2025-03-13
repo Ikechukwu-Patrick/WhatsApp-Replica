@@ -15,14 +15,21 @@ jobs:
         with:
           fetch-depth: 2  # Fetch the last 2 commits for debugging
 
+      - name: Debug Repository Structure
+        run: |
+          echo "Listing all files in the repository:"
+          ls -R
+
       - name: Check for Hardcoded Values in application.properties
         run: |
           # Define the path to application.properties
           PROPERTIES_FILE="whatsappclone/src/main/resources/application.properties"
 
-          # Check if the file exists
+          # Debug: Check if the file exists
           if [ ! -f "$PROPERTIES_FILE" ]; then
             echo "::error::File $PROPERTIES_FILE not found. Please check the path."
+            echo "Current directory: $(pwd)"
+            echo "Files in directory: $(ls -R)"
             exit 1
           fi
 
@@ -62,9 +69,11 @@ jobs:
           # Define the path to application.properties
           PROPERTIES_FILE="whatsappclone/src/main/resources/application.properties"
 
-          # Check if the file exists
+          # Debug: Check if the file exists
           if [ ! -f "$PROPERTIES_FILE" ]; then
             echo "::error::File $PROPERTIES_FILE not found. Please check the path."
+            echo "Current directory: $(pwd)"
+            echo "Files in directory: $(ls -R)"
             exit 1
           fi
 
