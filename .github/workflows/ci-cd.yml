@@ -35,9 +35,12 @@ jobs:
           fi
 
           # Check application.properties for hardcoded values
-          if grep -E '^[^#]*=' "$PROPERTIES_FILE" | grep -v '=\s*\${'; then
+          HARDCODED_VALUES=$(grep -E '^[^#]*=' "$PROPERTIES_FILE" | grep -v '=\s*\${')
+
+          # If hardcoded values are found, fail the workflow
+          if [ -n "$HARDCODED_VALUES" ]; then
             echo "::error::Hardcoded values detected in $PROPERTIES_FILE. Use placeholders (e.g., \${VAR})."
-            grep -E '^[^#]*=' "$PROPERTIES_FILE" | grep -v '=\s*\${'  # Show the offending lines
+            echo "$HARDCODED_VALUES"  # Show the offending lines
             exit 1
           else
             echo "No hardcoded values found in $PROPERTIES_FILE. Good job, engineers! 🎉"
