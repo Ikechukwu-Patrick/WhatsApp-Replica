@@ -32,16 +32,24 @@ jobs:
         id: get_secrets
         run: |
           echo "GitHub repository secrets:"
-          echo "${{ toJson(secrets) }}" | jq 'keys' > github_secrets.txt
+          
+          # Check if there are secrets available
+          SECRETS_JSON='${{ toJson(secrets) }}'
+
+          if [[ "$SECRETS_JSON" == "null" || -z "$SECRETS_JSON" ]]; then
+            echo "::error:: No GitHub secrets found. Make sure secrets are added in the repository settings."
+            exit 1
+          fi
+
+          echo "$SECRETS_JSON" | jq -r 'keys[]' > github_secrets.txt
           cat github_secrets.txt
-          echo "::set-output name=secrets::$(cat github_secrets.txt | tr -d '[]" ,\n')"
 
       - name: Compare Environment Variables and Secrets
         run: |
           echo "Checking for missing environment variables..."
           missing_vars=()
           for var in $(cat env_variables.txt); do
-            if ! grep -q "\"$var\"" github_secrets.txt; then
+            if ! grep -q "^$var$" github_secrets.txt; then
               missing_vars+=("$var")
             fi
           done
