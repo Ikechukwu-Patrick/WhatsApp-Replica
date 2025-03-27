@@ -18,12 +18,12 @@ jobs:
         with:
           fetch-depth: 2  # Fetch the last 2 commits for debugging
 
-      - name: Extract Environment Variables from Code
+      - name: Extract Environment Variables from application.properties
         id: extract_vars
         run: |
-          # Extract env variables from your code (Node.js style)
-          grep -rohE '\bprocess\.env\.[A-Za-z_][A-Za-z0-9_]*' . | sed 's/process.env.//' | sort -u > env_variables.txt
-          
+          # Find all variables inside ${...} from .properties files
+          grep -oP '\$\{\K[A-Za-z_][A-Za-z0-9_]*(?=\})' whatsappclone/src/main/resources/application.properties | sort -u > env_variables.txt
+
           echo "Extracted environment variables:"
           cat env_variables.txt
           echo "::set-output name=env_vars::$(cat env_variables.txt | tr '\n' ' ')"
