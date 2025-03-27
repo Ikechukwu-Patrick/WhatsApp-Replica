@@ -89,3 +89,10 @@ jobs:
       - name: Build with Maven
         working-directory: whatsappclone  # Set the correct directory
         run: mvn clean package -DskipTests  # Skip tests during build
+
+
+
+#        AEUYIV
+#        DATABASE_PASSWORD
+#        DDL_CHANGES
+#        TUKYOI
