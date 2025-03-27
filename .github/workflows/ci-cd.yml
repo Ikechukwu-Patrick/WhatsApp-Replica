@@ -1,88 +1,88 @@
-name: CI/CD Pipeline with Auto-Adding GitHub Secrets
+name: Enhanced Spring Boot CI/CD
 
 on:
   push:
-    branches:
-      - master
-  workflow_dispatch:  # Allow manual triggering
+    branches: [ master ]
+  workflow_dispatch:
 
 jobs:
-  check-env-secrets:
-    name: Check and Add Missing Environment Variables
+  secret-management:
+    name: Secret Synchronization
     runs-on: ubuntu-latest
     outputs:
-      missing_vars: ${{ env.missing_vars || 'none' }}
+      build_approved: ${{ steps.validate-secrets.outputs.ready }}
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Extract Environment Variables
-        id: extract_vars
+      - name: Install GitHub CLI
         run: |
-          # Scan multiple file types for env variables
-          grep -rhEo '\$\{([A-Z_]+)\}' whatsappclone/src/ whatsappclone/src/main/resources/ | \
-            cut -d'{' -f2 | tr -d '}' | sort -u > env_variables.txt
-          
-          echo "Extracted environment variables:"
-          cat env_variables.txt
-          echo "env_vars=$(cat env_variables.txt | tr '\n' ' ')" >> $GITHUB_ENV
+          sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-key C99B11DEB97541F0
+          sudo apt-add-repository https://cli.github.com/packages
+          sudo apt update && sudo apt install gh -y
+          gh auth login --with-token <<< "${{ secrets.GH_TOKEN }}"
 
-      - name: Get GitHub Secrets
-        id: get_secrets
+      - name: Scan Spring Boot Properties
+        id: scan-props
         run: |
-          echo "Fetching GitHub repository secrets..."
-          SECRETS_JSON='${{ toJson(secrets) }}'
+          # Scan application.properties/yml and Java files
+          grep -rohE '\$\{[A-Z0-9_]+\}' whatsappclone/src/main/resources/ | \
+            sed 's/\${//;s/}//' | sort -u > env_vars.txt
           
-          if [[ "$SECRETS_JSON" == "null" ]]; then
-            echo "::warning:: No GitHub secrets found. Will check for missing variables."
-            touch github_secrets.txt
+          grep -rohE '@Value\("\${[A-Z0-9_]+}"' whatsappclone/src/main/java/ | \
+            grep -oE '\${[A-Z0-9_]+}' | \
+            sed 's/\${//;s/}//' >> env_vars.txt
+          
+          sort -u env_vars.txt -o env_vars.txt
+          echo "Found Spring properties:"
+          cat env_vars.txt
+          echo "env_vars=$(cat env_vars.txt | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
+
+      - name: Validate Secrets
+        id: validate-secrets
+        run: |
+          gh secret list --json name | jq -r '.[].name' > secrets.txt
+          
+          # Find missing secrets
+          comm -23 env_vars.txt secrets.txt > missing.txt
+          missing_count=$(wc -l < missing.txt)
+          
+          if [ $missing_count -gt 0 ]; then
+            echo "Adding $missing_count secrets..."
+            while read var; do
+              # Try to get value from .env files first
+              val=$(grep -m1 "^$var=" whatsappclone/src/main/resources/*.properties 2>/dev/null | cut -d '=' -f2- || \
+                    echo "PLACEHOLDER_$(openssl rand -hex 6)")
+              gh secret set "$var" --body "$val"
+              echo "Added $var"
+            done < missing.txt
+          
+            echo "::warning::New secrets added. Update placeholders in repo settings."
+            echo "ready=false" >> $GITHUB_OUTPUT
+            echo "missing_vars=$(cat missing.txt | tr '\n' ',')" >> $GITHUB_OUTPUT
           else
-            echo "$SECRETS_JSON" | jq -r 'keys[]' > github_secrets.txt
-            echo "Existing secrets:"
-            cat github_secrets.txt
+            echo "ready=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Compare Variables and Secrets
-        id: compare_secrets
-        run: |
-          missing_vars=()
-          for var in $(cat env_variables.txt); do
-            if ! grep -q "^$var$" github_secrets.txt; then
-              missing_vars+=("$var")
-            fi
-          done
-          
-          if [ ${#missing_vars[@]} -ne 0 ]; then
-            echo "❌ Missing variables: ${missing_vars[*]}"
-            echo "missing_vars=$(IFS=,; echo "${missing_vars[*]}")" >> $GITHUB_ENV
-            echo "::set-output name=missing_vars::${missing_vars[*]}"
-          else
-            echo "✅ All variables accounted for"
-          fi
-
-      - name: Request Manual Secret Input
-        if: env.missing_vars != ''
-        id: request_secrets
+      - name: Notify Slack
+        if: steps.validate-secrets.outputs.ready == 'false'
         uses: slackapi/slack-github-action@v1.23.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
         with:
           payload: |
             {
-              "text": "⚠️ Missing GitHub Secrets Detected",
+              "text": "⚠️ New Secrets Added to ${{ github.repository }}",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*🚨 Missing GitHub Secrets in ${{ github.repository }}*"
+                    "text": "*Action Required:* Update these placeholder secrets:"
                   }
                 },
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "The following environment variables need to be added:\n`${{ env.missing_vars }}`"
+                    "text": "`${{ steps.validate-secrets.outputs.missing_vars }}`"
                   }
                 },
                 {
@@ -92,31 +92,34 @@ jobs:
                       "type": "button",
                       "text": {
                         "type": "plain_text",
-                        "text": "Add Secrets"
+                        "text": "Update Secrets"
                       },
-                      "url": "https://github.com/${{ github.repository }}/settings/secrets/actions/new"
+                      "url": "https://github.com/${{ github.repository }}/settings/secrets/actions"
                     }
                   ]
                 }
               ]
             }
 
-  build:
-    name: Build and Deploy Application
-    needs: check-env-secrets
-    if: needs.check-env-secrets.outputs.missing_vars == 'none' || github.event_name == 'workflow_dispatch'
+  build-and-deploy:
+    name: Build & Deploy
+    needs: secret-management
+    if: needs.secret-management.outputs.build_approved == 'true'
     runs-on: ubuntu-latest
+    env:
+      SPRING_DATASOURCE_URL: ${{ secrets.SPRING_DATASOURCE_URL }}
+      SPRING_DATASOURCE_USERNAME: ${{ secrets.SPRING_DATASOURCE_USERNAME }}
+      SPRING_DATASOURCE_PASSWORD: ${{ secrets.SPRING_DATASOURCE_PASSWORD }}
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Cache Dependencies
+      - name: Cache Maven dependencies
         uses: actions/cache@v3
         with:
           path: |
@@ -124,27 +127,31 @@ jobs:
             whatsappclone/target
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
 
-      - name: Build Application
+      - name: Build with Maven
         working-directory: whatsappclone
         run: mvn clean package -DskipTests
 
+      - name: Verify JAR
+        run: |
+          java -jar whatsappclone/target/*.jar --spring.profiles.active=ci &
+          sleep 60
+          curl -s http://localhost:8080/actuator/health | grep -q '"status":"UP"' || exit 1
+
       - name: Docker Build & Push
-        if: success()
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         run: |
+          cd whatsappclone
           docker build -t whatsapp-clone:${{ github.sha }} .
           echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-          docker push whatsapp-clone:${{ github.sha }}
+          docker tag whatsapp-clone:${{ github.sha }} your-registry/whatsapp-clone:${{ github.sha }}
+          docker push your-registry/whatsapp-clone:${{ github.sha }}
 
       - name: Deploy to Kubernetes
-        if: success()
         uses: azure/k8s-deploy@v4
         with:
-          namespace: 'default'
-          manifests: |
-            whatsappclone/deployments/*.yaml
-          images: |
-            whatsapp-clone:${{ github.sha }}
-          kubectl-version: 'latest'
+          namespace: default
+          manifests: whatsappclone/deployments/*.yaml
+          images: your-registry/whatsapp-clone:${{ github.sha }}
+          kubectl-version: latest
