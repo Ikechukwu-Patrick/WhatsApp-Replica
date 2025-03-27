@@ -53,7 +53,7 @@ jobs:
               missing_vars+=("$var")
             fi
           done
-          
+            
           if [ ${#missing_vars[@]} -ne 0 ]; then
             echo "❌ Missing environment variables in GitHub Secrets:"
             printf '%s\n' "${missing_vars[@]}"
