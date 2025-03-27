@@ -4,24 +4,27 @@ on:
   push:
     branches:
       - master
+  workflow_dispatch:  # Allow manual triggering
 
 jobs:
   check-env-secrets:
     name: Check and Add Missing Environment Variables
     runs-on: ubuntu-latest
+    outputs:
+      missing_vars: ${{ env.missing_vars || 'none' }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Extract Environment Variables from application.properties
+      - name: Extract Environment Variables
         id: extract_vars
         run: |
-          # Extract env variables inside ${...} in application.properties
-          grep -oP '\$\{\K[A-Za-z_][A-Za-z0-9_]*(?=\})' whatsappclone/src/main/resources/application.properties | sort -u > env_variables.txt
+          # Scan multiple file types for env variables
+          grep -rhEo '\$\{([A-Z_]+)\}' whatsappclone/src/ whatsappclone/src/main/resources/ | \
+            cut -d'{' -f2 | tr -d '}' | sort -u > env_variables.txt
           
           echo "Extracted environment variables:"
           cat env_variables.txt
-          
           echo "env_vars=$(cat env_variables.txt | tr '\n' ' ')" >> $GITHUB_ENV
 
       - name: Get GitHub Secrets
@@ -30,21 +33,19 @@ jobs:
           echo "Fetching GitHub repository secrets..."
           SECRETS_JSON='${{ toJson(secrets) }}'
           
-          if [[ "$SECRETS_JSON" == "null" || -z "$SECRETS_JSON" ]]; then
-            echo "::error:: No GitHub secrets found. Please ensure you have added at least one secret in your repository settings."
-            exit 1
+          if [[ "$SECRETS_JSON" == "null" ]]; then
+            echo "::warning:: No GitHub secrets found. Will check for missing variables."
+            touch github_secrets.txt
+          else
+            echo "$SECRETS_JSON" | jq -r 'keys[]' > github_secrets.txt
+            echo "Existing secrets:"
+            cat github_secrets.txt
           fi
-          
-          echo "$SECRETS_JSON" | jq -r 'keys[]' > github_secrets.txt
-          echo "Existing secrets:"
-          cat github_secrets.txt
 
-      - name: Compare Environment Variables and Secrets
+      - name: Compare Variables and Secrets
         id: compare_secrets
         run: |
-          echo "Checking for missing environment variables..."
           missing_vars=()
-          
           for var in $(cat env_variables.txt); do
             if ! grep -q "^$var$" github_secrets.txt; then
               missing_vars+=("$var")
@@ -52,83 +53,98 @@ jobs:
           done
           
           if [ ${#missing_vars[@]} -ne 0 ]; then
-            echo "❌ Missing environment variables in GitHub Secrets:"
-            printf '%s\n' "${missing_vars[@]}"
+            echo "❌ Missing variables: ${missing_vars[*]}"
             echo "missing_vars=$(IFS=,; echo "${missing_vars[*]}")" >> $GITHUB_ENV
+            echo "::set-output name=missing_vars::${missing_vars[*]}"
           else
-            echo "✅ All required environment variables are present."
+            echo "✅ All variables accounted for"
           fi
 
-      - name: Fetch GitHub Repository Public Key
+      - name: Request Manual Secret Input
         if: env.missing_vars != ''
-        id: fetch_key
+        id: request_secrets
+        uses: slackapi/slack-github-action@v1.23.0
         env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-          REPO: ${{ github.repository }}
-        run: |
-          echo "Fetching repository public key..."
-          response=$(curl -s -H "Authorization: token $GH_PAT" -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$REPO/actions/secrets/public-key")
-
-          echo "$response" | jq .
-          
-          echo "$response" | jq -r '.key' > key.txt
-          echo "$response" | jq -r '.key_id' > key_id.txt
-
-          echo "key_id=$(cat key_id.txt)" >> $GITHUB_ENV
-
-      - name: Add Missing Secrets to GitHub
-        if: env.missing_vars != ''
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-          REPO: ${{ github.repository }}
-        run: |
-          echo "🛠 Encrypting and adding missing secrets to GitHub..."
-          IFS=',' read -r -a missing_vars <<< "${{ env.missing_vars }}"
-          
-          for secret in "${missing_vars[@]}"; do
-            echo "🔹 Encrypting secret: $secret"
-
-            SECRET_VALUE="PLACEHOLDER_VALUE"
-          
-            # Encrypt the secret using GitHub's public key
-            ENCRYPTED_VALUE=$(echo -n "$SECRET_VALUE" | openssl enc -e -aes-256-cbc -a -A -K "$(cat key.txt)" -iv 00000000000000000000000000000000)
-          
-            # Add the encrypted secret to GitHub
-            curl -X PUT "https://api.github.com/repos/$REPO/actions/secrets/$secret" \
-              -H "Accept: application/vnd.github+json" \
-              -H "Authorization: token $GH_PAT" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              -d "{\"encrypted_value\":\"$ENCRYPTED_VALUE\", \"key_id\":\"${{ env.key_id }}\"}"
-          done
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+        with:
+          payload: |
+            {
+              "text": "⚠️ Missing GitHub Secrets Detected",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*🚨 Missing GitHub Secrets in ${{ github.repository }}*"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "The following environment variables need to be added:\n`${{ env.missing_vars }}`"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "Add Secrets"
+                      },
+                      "url": "https://github.com/${{ github.repository }}/settings/secrets/actions/new"
+                    }
+                  ]
+                }
+              ]
+            }
 
   build:
     name: Build and Deploy Application
     needs: check-env-secrets
+    if: needs.check-env-secrets.outputs.missing_vars == 'none' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set Up JDK 17
+      - name: Setup Java
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Cache Maven Dependencies
+      - name: Cache Dependencies
         uses: actions/cache@v3
         with:
-          path: ~/.m2
+          path: |
+            ~/.m2
+            whatsappclone/target
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
 
-      - name: Build with Maven
-        working-directory: whatsappclone  # Set the correct directory
-        run: mvn clean package -DskipTests  # Skip tests during build
+      - name: Build Application
+        working-directory: whatsappclone
+        run: mvn clean package -DskipTests
 
-      - name: Deploy Application (Modify this step)
+      - name: Docker Build & Push
+        if: success()
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         run: |
-          echo "🚀 Deploying application..."
-          # Add your deployment commands here (e.g., Docker, Kubernetes, SCP, etc.)
+          docker build -t whatsapp-clone:${{ github.sha }} .
+          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+          docker push whatsapp-clone:${{ github.sha }}
+
+      - name: Deploy to Kubernetes
+        if: success()
+        uses: azure/k8s-deploy@v4
+        with:
+          namespace: 'default'
+          manifests: |
+            whatsappclone/deployments/*.yaml
+          images: |
+            whatsapp-clone:${{ github.sha }}
+          kubectl-version: 'latest'
