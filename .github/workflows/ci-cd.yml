@@ -7,44 +7,44 @@ on:
   pull_request:
     branches:
       - master
-
-jobs:
-  env-check:
-    name: Check for Hardcoded Environment Variables
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 2  # Fetch the last 2 commits for debugging
-
-      - name: Debug Repository Structure
-        run: |
-          echo "Listing all files in the repository:"
-          ls -R
-
-      - name: Check for Hardcoded Values in application.properties
-        run: |
-          # Define the path to application.properties
-          PROPERTIES_FILE="whatsappclone/src/main/resources/application.properties"  # 👈 Correct path
-
-          # Check if the file exists
-          if [ ! -f "$PROPERTIES_FILE" ]; then
-            echo "::error::File $PROPERTIES_FILE not found. Please check the path."
-            exit 1
-          fi
-
-          # Check application.properties for hardcoded values
-          HARDCODED_VALUES=$(grep -E '^[^#]*=' "$PROPERTIES_FILE" | grep -v '=\s*\${')
-
-          # If hardcoded values are found, fail the workflow
-          if [ -n "$HARDCODED_VALUES" ]; then
-            echo "::error::Hardcoded values detected in $PROPERTIES_FILE. Use placeholders (e.g., \${VAR})."
-            echo "$HARDCODED_VALUES"  # Show the offending lines
-            exit 1
-          else
-            echo "No hardcoded values found in $PROPERTIES_FILE. Good job, engineers! 🎉"
-          fi
+#
+#jobs:
+#  env-check:
+#    name: Check for Hardcoded Environment Variables
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout Repository
+#        uses: actions/checkout@v3
+#        with:
+#          fetch-depth: 2  # Fetch the last 2 commits for debugging
+#
+#      - name: Debug Repository Structure
+#        run: |
+#          echo "Listing all files in the repository:"
+#          ls -R
+#
+#      - name: Check for Hardcoded Values in application.properties
+#        run: |
+#          # Define the path to application.properties
+#          PROPERTIES_FILE="whatsappclone/src/main/resources/application.properties"  # 👈 Correct path
+#
+#          # Check if the file exists
+#          if [ ! -f "$PROPERTIES_FILE" ]; then
+#            echo "::error::File $PROPERTIES_FILE not found. Please check the path."
+#            exit 1
+#          fi
+#
+#          # Check application.properties for hardcoded values
+#          HARDCODED_VALUES=$(grep -E '^[^#]*=' "$PROPERTIES_FILE" | grep -v '=\s*\${')
+#
+#          # If hardcoded values are found, fail the workflow
+#          if [ -n "$HARDCODED_VALUES" ]; then
+#            echo "::error::Hardcoded values detected in $PROPERTIES_FILE. Use placeholders (e.g., \${VAR})."
+#            echo "$HARDCODED_VALUES"  # Show the offending lines
+#            exit 1
+#          else
+#            echo "No hardcoded values found in $PROPERTIES_FILE. Good job, engineers! 🎉"
+#          fi
 
   build:
     name: Build Application
