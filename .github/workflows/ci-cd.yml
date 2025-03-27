@@ -7,44 +7,52 @@ on:
   pull_request:
     branches:
       - master
-#
-#jobs:
-#  env-check:
-#    name: Check for Hardcoded Environment Variables
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout Repository
-#        uses: actions/checkout@v3
-#        with:
-#          fetch-depth: 2  # Fetch the last 2 commits for debugging
-#
-#      - name: Debug Repository Structure
-#        run: |
-#          echo "Listing all files in the repository:"
-#          ls -R
-#
-#      - name: Check for Hardcoded Values in application.properties
-#        run: |
-#          # Define the path to application.properties
-#          PROPERTIES_FILE="whatsappclone/src/main/resources/application.properties"  # 👈 Correct path
-#
-#          # Check if the file exists
-#          if [ ! -f "$PROPERTIES_FILE" ]; then
-#            echo "::error::File $PROPERTIES_FILE not found. Please check the path."
-#            exit 1
-#          fi
-#
-#          # Check application.properties for hardcoded values
-#          HARDCODED_VALUES=$(grep -E '^[^#]*=' "$PROPERTIES_FILE" | grep -v '=\s*\${')
-#
-#          # If hardcoded values are found, fail the workflow
-#          if [ -n "$HARDCODED_VALUES" ]; then
-#            echo "::error::Hardcoded values detected in $PROPERTIES_FILE. Use placeholders (e.g., \${VAR})."
-#            echo "$HARDCODED_VALUES"  # Show the offending lines
-#            exit 1
-#          else
-#            echo "No hardcoded values found in $PROPERTIES_FILE. Good job, engineers! 🎉"
-#          fi
+
+jobs:
+  env-check:
+    name: Check for Missing Environment Variables in GitHub Secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 2  # Fetch the last 2 commits for debugging
+
+      - name: Extract Environment Variables from Code
+        id: extract_vars
+        run: |
+          # Extract env variables from your code (Node.js style)
+          grep -rohE '\bprocess\.env\.[A-Za-z_][A-Za-z0-9_]*' . | sed 's/process.env.//' | sort -u > env_variables.txt
+          
+          echo "Extracted environment variables:"
+          cat env_variables.txt
+          echo "::set-output name=env_vars::$(cat env_variables.txt | tr '\n' ' ')"
+
+      - name: Get GitHub Secrets
+        id: get_secrets
+        run: |
+          echo "GitHub repository secrets:"
+          echo "${{ toJson(secrets) }}" | jq 'keys' > github_secrets.txt
+          cat github_secrets.txt
+          echo "::set-output name=secrets::$(cat github_secrets.txt | tr -d '[]" ,\n')"
+
+      - name: Compare Environment Variables and Secrets
+        run: |
+          echo "Checking for missing environment variables..."
+          missing_vars=()
+          for var in $(cat env_variables.txt); do
+            if ! grep -q "\"$var\"" github_secrets.txt; then
+              missing_vars+=("$var")
+            fi
+          done
+          
+          if [ ${#missing_vars[@]} -ne 0 ]; then
+            echo "❌ Missing environment variables in GitHub Secrets:"
+            printf '%s\n' "${missing_vars[@]}"
+            exit 1  # Fail the workflow if secrets are missing
+          else
+            echo "✅ All environment variables are present in GitHub Secrets."
+          fi
 
   build:
     name: Build Application
