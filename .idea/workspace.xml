@@ -4,7 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="747b283e-5f77-4b0c-b787-01870b11f85d" name="Changes" comment="" />
+    <list default="true" id="747b283e-5f77-4b0c-b787-01870b11f85d" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/whatsappclone/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/whatsappclone/src/main/resources/application.properties" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -71,7 +74,7 @@
     &quot;Spring Boot.WhatsAppCloneApiApplication.executor&quot;: &quot;Run&quot;,
     &quot;git-widget-placeholder&quot;: &quot;master&quot;,
     &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;C:/Users/DELL/Downloads/xalmon&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/DELL/Downloads/marbleclone/marble&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
@@ -201,7 +204,10 @@
       <workItem from="1741695088172" duration="24114000" />
       <workItem from="1741768156865" duration="9767000" />
       <workItem from="1741793005210" duration="896000" />
-      <workItem from="1741845733255" duration="4606000" />
+      <workItem from="1741845733255" duration="6936000" />
+      <workItem from="1741967934610" duration="145000" />
+      <workItem from="1742386974393" duration="221000" />
+      <workItem from="1743080557373" duration="2438000" />
     </task>
     <servers />
   </component>
