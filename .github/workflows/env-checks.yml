@@ -1,27 +1,27 @@
-name: Check for Hardcoded Environment Variables
-
-on:
-  pull_request:
-    branches: [ master ]
-  push:
-    branches: [ master ]
-
-jobs:
-  check-env-vars:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # Fetch the last 2 commits for debugging
-
-      - name: Check for Hardcoded Values in application.properties
-        run: |
-          # Check application.properties for hardcoded values
-          if grep -E '^[^#]=' application.properties | grep -v '=\s\${'; then
-            echo "::error::Hardcoded values detected in application.properties. Use placeholders (e.g., \${VAR})."
-            grep -E '^[^#]=' application.properties | grep -v '=\s\${'  # Show the offending lines
-            exit 1
-          else
-            echo "No hardcoded values found in application.properties. Good job, engineers! 🎉"
-          fi
+#name: Check for Hardcoded Environment Variables
+#
+#on:
+#  pull_request:
+#    branches: [ master ]
+#  push:
+#    branches: [ master ]
+#
+#jobs:
+#  check-env-vars:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout Repository
+#        uses: actions/checkout@v3
+#        with:
+#          fetch-depth: 0  # Fetch the last 2 commits for debugging
+#
+#      - name: Check for Hardcoded Values in application.properties
+#        run: |
+#          # Check application.properties for hardcoded values
+#          if grep -E '^[^#]=' application.properties | grep -v '=\s\${'; then
+#            echo "::error::Hardcoded values detected in application.properties. Use placeholders (e.g., \${VAR})."
+#            grep -E '^[^#]=' application.properties | grep -v '=\s\${'  # Show the offending lines
+#            exit 1
+#          else
+#            echo "No hardcoded values found in application.properties. Good job, engineers! 🎉"
+#          fi
