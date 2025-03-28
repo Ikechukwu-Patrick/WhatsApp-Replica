@@ -41,43 +41,47 @@ jobs:
             -name "*.yaml" \
           \) -exec grep -Eho '\$\{[A-Z0-9_]+\}|@Value\("\\$\\{[A-Z0-9_]+\\}"' {} + | \
             grep -oE '[A-Z0-9_]+' | \
-            sort -u | jq -R -s -c 'split("\n")[:-1]' > env_vars.json
+            sort -u | jq -R -s -c 'split("\n") | map(select(. != ""))' > env_vars.json
           
           echo "📂 Extracted environment variables:"
           cat env_vars.json
           
-          echo "env_vars=$(cat env_vars.json)" >> $GITHUB_ENV
+          # Set the output for later steps using the recommended GITHUB_OUTPUT file
+          echo "env_vars=$(cat env_vars.json)" >> $GITHUB_OUTPUT
 
       - name: Validate Secrets
         id: validate-secrets
         run: |
           echo "🔎 Validating secrets..."
-          echo "${{ env.env_vars }}" | jq -r '.[]' > env_vars.txt
+          # Use the step output from scan-props rather than an env var
+          echo "${{ steps.scan-props.outputs.env_vars }}" | jq -r '.[]' > env_vars.txt
           
-          # Get existing secrets
+          # Fetch existing secrets from GitHub
           gh secret list --json name | jq -r '.[].name' > secrets.txt
           
-          # Find missing secrets
+          # Find missing secrets by comparing the two lists
           grep -vxFf secrets.txt env_vars.txt > missing.txt || true
           missing_count=$(wc -l < missing.txt | tr -d ' ')
           
           if [ "$missing_count" -gt 0 ]; then
             echo "⚠️ Missing secrets found: $missing_count"
             cat missing.txt
-            echo "ready=false" >> $GITHUB_ENV
-            echo "missing_vars=$(tr '\n' ',' < missing.txt | sed 's/,$//')" >> $GITHUB_ENV
+            echo "ready=false" >> $GITHUB_OUTPUT
+            echo "missing_vars=$(tr '\n' ',' < missing.txt | sed 's/,$//')" >> $GITHUB_OUTPUT
           else
             echo "✅ All required secrets are present."
-            echo "ready=true" >> $GITHUB_ENV
-            echo "missing_vars=none" >> $GITHUB_ENV
+            echo "ready=true" >> $GITHUB_OUTPUT
+            echo "missing_vars=none" >> $GITHUB_OUTPUT
           fi
 
       - name: Auto-Add Missing Secrets
-        if: env.ready == 'false'
+        if: steps.validate-secrets.outputs.ready == 'false'
         run: |
           echo "⚙️ Adding missing secrets..."
           while IFS= read -r var; do
-            value="PLACEHOLDER_$(openssl rand -hex 8)"  # Generates a random placeholder value
+            # Attempt to extract the value from .env files, or generate a placeholder if not found
+            value=$(grep -m1 "^$var=" whatsappclone/src/main/resources/*.env* 2>/dev/null | cut -d '=' -f2- || echo "PLACEHOLDER_$(openssl rand -hex 8)")
+            echo "Adding $var with value $value..."
             if gh secret set "$var" --body "$value"; then
               echo "✅ Added $var"
             else
@@ -86,17 +90,15 @@ jobs:
             fi
           done < missing.txt
 
-      - name: Show Notification in GitHub Actions UI
-        if: env.ready == 'false'
+      - name: Generate GitHub Actions Summary
+        if: steps.validate-secrets.outputs.ready == 'false'
         run: |
           echo "### 🚨 New Secrets Added to GitHub 🚨" >> $GITHUB_STEP_SUMMARY
           echo "The following secrets were automatically added:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
           while IFS= read -r secret; do
             echo "- \`$secret\`" >> $GITHUB_STEP_SUMMARY
           done < missing.txt
-          
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "🔗 **[Click here to update your secrets](https://github.com/${{ github.repository }}/settings/secrets/actions)**" >> $GITHUB_STEP_SUMMARY
 
@@ -134,7 +136,6 @@ jobs:
         run: |
           java -jar whatsappclone/target/*.jar --spring.profiles.active=ci &
           APP_PID=$!
-          timeout 60 bash -c 'while ! curl -s http://localhost:8080/actuator/health | grep -q '"'"'"status":"UP"'"'"'; do sleep 2; done' || \
-            { echo "::error::Application failed to start"; kill $APP_PID; exit 1; }
+          timeout 60 bash -c 'while ! curl -s http://localhost:8080/actuator/health | grep -q '"'"'"status":"UP"'"'"'; do sleep 2; done' || { echo "::error::Application failed to start"; kill $APP_PID; exit 1; }
           curl -s http://localhost:8080/actuator/health | jq .
           kill $APP_PID
