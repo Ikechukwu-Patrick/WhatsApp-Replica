@@ -27,15 +27,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          echo "$GH_TOKEN" > token.txt
-          gh auth login --with-token < token.txt
-          rm token.txt
+          mkdir -p ~/.config/gh
+          cat > ~/.config/gh/hosts.yml <<EOF
+          github.com:
+              user: gh-actions
+              oauth_token: $GH_TOKEN
+              git_protocol: https
+          EOF
           gh auth status
+          gh api user
 
       - name: Scan Spring Boot Properties
         id: scan-props
         run: |
-          # Improved scanning with proper JSON output
           find whatsappclone/src -type f \( \
             -name "*.java" -o \
             -name "*.properties" -o \
@@ -43,32 +47,25 @@ jobs:
             -name "*.yaml" \
           \) -exec grep -Eho '\$\{[A-Z0-9_]+\}|@Value\("\\$\\{[A-Z0-9_]+\\}"' {} + | \
             grep -oE '[A-Z0-9_]+' | \
-            sort -u | jq -R -s 'split("\n")[:-1]' > env_vars.json
+            sort -u > env_vars.txt
           
+          JSON_VARS=$(jq -Rn '[inputs]' < env_vars.txt)
           echo "Found Spring properties:"
-          cat env_vars.json
-          
-          # Set output using proper JSON format
-          echo "env_vars=$(cat env_vars.json)" >> $GITHUB_OUTPUT
+          echo "$JSON_VARS"
+          echo "env_vars=${JSON_VARS}" >> $GITHUB_OUTPUT
+          echo "::set-output name=env_vars::${JSON_VARS}"
 
       - name: Validate Secrets
         id: validate-secrets
         run: |
-          # Read environment variables from previous step
-          echo "${{ steps.scan-props.outputs.env_vars }}" > env_vars.json
-          jq -r '.[]' env_vars.json > env_vars.txt
-          
-          # Get current secrets
+          jq -r '.[]' <<< "${{ steps.scan-props.outputs.env_vars }}" > env_vars.txt
           gh secret list --json name | jq -r '.[].name' > secrets.txt
-          
-          # Find missing secrets
           comm -23 env_vars.txt secrets.txt > missing.txt || true
           missing_count=$(wc -l < missing.txt | tr -d ' ')
           
           if [ "$missing_count" -gt 0 ]; then
             echo "Adding $missing_count secrets..."
             while IFS= read -r var; do
-              # Try to get value from .env files first
               val=$(grep -m1 "^$var=" whatsappclone/src/main/resources/*.env* 2>/dev/null | cut -d '=' -f2- || \
                     echo "PLACEHOLDER_$(openssl rand -hex 8)")
           
@@ -99,7 +96,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Action Required:* Update these placeholder secrets in GitHub:"
+                    "text": "*Action Required:* Update these placeholder secrets:"
                   }
                 },
                 {
@@ -159,25 +156,7 @@ jobs:
         run: |
           java -jar whatsappclone/target/*.jar --spring.profiles.active=ci &
           APP_PID=$!
-          sleep 30
-          curl -s http://localhost:8080/actuator/health | grep -q '"status":"UP"' || { echo "::error::Application failed to start"; kill $APP_PID; exit 1; }
+          timeout 60 bash -c 'while ! curl -s http://localhost:8080/actuator/health | grep -q '"'"'"status":"UP"'"'"'; do sleep 2; done' || \
+            { echo "::error::Application failed to start"; kill $APP_PID; exit 1; }
+          curl -s http://localhost:8080/actuator/health | jq .
           kill $APP_PID
-
-      - name: Docker Build & Push
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        run: |
-          cd whatsappclone
-          docker build -t whatsapp-clone:${{ github.sha }} .
-          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-          docker tag whatsapp-clone:${{ github.sha }} your-registry/whatsapp-clone:${{ github.sha }}
-          docker push your-registry/whatsapp-clone:${{ github.sha }}
-
-      - name: Deploy to Kubernetes
-        uses: azure/k8s-deploy@v4
-        with:
-          namespace: default
-          manifests: whatsappclone/deployments/*.yaml
-          images: your-registry/whatsapp-clone:${{ github.sha }}
-          kubectl-version: latest
