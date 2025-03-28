@@ -34,7 +34,6 @@ jobs:
         id: scan-props
         run: |
           echo "🔍 Scanning for environment variables..."
-          
           find whatsappclone/src -type f \( \
             -name "*.java" -o \
             -name "*.properties" -o \
@@ -42,25 +41,20 @@ jobs:
             -name "*.yaml" \
           \) -exec grep -Eho '\$\{[A-Z0-9_]+\}|@Value\("\\$\\{[A-Z0-9_]+\\}"' {} + | \
             grep -oE '[A-Z0-9_]+' | \
-            sort -u | jq -R -s -c 'split("\n") | map(select(. != ""))' > env_vars.json
+            sort -u | jq -R -s -c 'split("\n")[:-1]' > env_vars.json
           
           echo "📂 Extracted environment variables:"
           cat env_vars.json
           
-          echo "env_vars=$(cat env_vars.json)" >> $GITHUB_OUTPUT
+          echo "env_vars=$(cat env_vars.json)" >> $GITHUB_ENV
 
       - name: Validate Secrets
         id: validate-secrets
         run: |
           echo "🔎 Validating secrets..."
+          echo "${{ env.env_vars }}" | jq -r '.[]' > env_vars.txt
           
-          cat env_vars.json  # Debugging step: Check extracted JSON
-          jq . env_vars.json  # Validate JSON structure
-          
-          # Extract environment variable names
-          jq -r '.[]' env_vars.json > env_vars.txt
-          
-          # Fetch existing GitHub secrets
+          # Get existing secrets
           gh secret list --json name | jq -r '.[].name' > secrets.txt
           
           # Find missing secrets
@@ -70,51 +64,41 @@ jobs:
           if [ "$missing_count" -gt 0 ]; then
             echo "⚠️ Missing secrets found: $missing_count"
             cat missing.txt
-            echo "ready=false" >> $GITHUB_OUTPUT
-            echo "missing_vars=$(tr '\n' ',' < missing.txt | sed 's/,$//')" >> $GITHUB_OUTPUT
+            echo "ready=false" >> $GITHUB_ENV
+            echo "missing_vars=$(tr '\n' ',' < missing.txt | sed 's/,$//')" >> $GITHUB_ENV
           else
-            echo "✅ All secrets are present."
-            echo "ready=true" >> $GITHUB_OUTPUT
-            echo "missing_vars=none" >> $GITHUB_OUTPUT
+            echo "✅ All required secrets are present."
+            echo "ready=true" >> $GITHUB_ENV
+            echo "missing_vars=none" >> $GITHUB_ENV
           fi
 
-      - name: Notify Slack
-        if: steps.validate-secrets.outputs.ready == 'false'
-        uses: slackapi/slack-github-action@v1.23.0
-        with:
-          payload: |
-            {
-              "text": "⚠️ New Secrets Added to ${{ github.repository }}",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Action Required:* Update these placeholder secrets:"
-                  }
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "`${{ steps.validate-secrets.outputs.missing_vars }}`"
-                  }
-                },
-                {
-                  "type": "actions",
-                  "elements": [
-                    {
-                      "type": "button",
-                      "text": {
-                        "type": "plain_text",
-                        "text": "Update Secrets"
-                      },
-                      "url": "https://github.com/${{ github.repository }}/settings/secrets/actions"
-                    }
-                  ]
-                }
-              ]
-            }
+      - name: Auto-Add Missing Secrets
+        if: env.ready == 'false'
+        run: |
+          echo "⚙️ Adding missing secrets..."
+          while IFS= read -r var; do
+            value="PLACEHOLDER_$(openssl rand -hex 8)"  # Generates a random placeholder value
+            if gh secret set "$var" --body "$value"; then
+              echo "✅ Added $var"
+            else
+              echo "::error:: Failed to add secret $var"
+              exit 1
+            fi
+          done < missing.txt
+
+      - name: Show Notification in GitHub Actions UI
+        if: env.ready == 'false'
+        run: |
+          echo "### 🚨 New Secrets Added to GitHub 🚨" >> $GITHUB_STEP_SUMMARY
+          echo "The following secrets were automatically added:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          while IFS= read -r secret; do
+            echo "- \`$secret\`" >> $GITHUB_STEP_SUMMARY
+          done < missing.txt
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 **[Click here to update your secrets](https://github.com/${{ github.repository }}/settings/secrets/actions)**" >> $GITHUB_STEP_SUMMARY
 
   build-and-deploy:
     name: Build & Deploy
