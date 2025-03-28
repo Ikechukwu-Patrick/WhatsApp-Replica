@@ -5,62 +5,80 @@ on:
     branches: [ master ]
   workflow_dispatch:
 
+env:
+  GH_CLI_VERSION: "2.47.0"
+
 jobs:
   secret-management:
     name: Secret Synchronization
     runs-on: ubuntu-latest
     outputs:
       build_approved: ${{ steps.validate-secrets.outputs.ready }}
+      missing_vars: ${{ steps.validate-secrets.outputs.missing_vars }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install GitHub CLI
+      - name: Install GitHub CLI (Cross-Platform)
         run: |
-          sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-key C99B11DEB97541F0
-          sudo apt-add-repository https://cli.github.com/packages
-          sudo apt update && sudo apt install gh -y
-          gh auth login --with-token <<< "${{ secrets.GH_TOKEN }}"
+          # Download and install GitHub CLI directly from releases
+          wget https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/gh_${GH_CLI_VERSION}_linux_amd64.deb
+          sudo dpkg -i gh_${GH_CLI_VERSION}_linux_amd64.deb || sudo apt-get install -f -y
+          rm gh_${GH_CLI_VERSION}_linux_amd64.deb
+
+      - name: Authenticate GitHub CLI
+        run: |
+          echo "${{ secrets.GH_TOKEN }}" | gh auth login --with-token
+          gh auth status
 
       - name: Scan Spring Boot Properties
         id: scan-props
         run: |
-          # Scan application.properties/yml and Java files
-          grep -rohE '\$\{[A-Z0-9_]+\}' whatsappclone/src/main/resources/ | \
-            sed 's/\${//;s/}//' | sort -u > env_vars.txt
+          # Improved scanning with better pattern matching
+          find whatsappclone/src -type f \( \
+            -name "*.java" -o \
+            -name "*.properties" -o \
+            -name "*.yml" -o \
+            -name "*.yaml" \
+          \) -exec grep -Eho '\$\{[A-Z0-9_]+\}|@Value\("\\$\\{[A-Z0-9_]+\\}"' {} + | \
+            grep -oE '[A-Z0-9_]+' | \
+            sort -u > env_vars.txt
           
-          grep -rohE '@Value\("\${[A-Z0-9_]+}"' whatsappclone/src/main/java/ | \
-            grep -oE '\${[A-Z0-9_]+}' | \
-            sed 's/\${//;s/}//' >> env_vars.txt
-          
-          sort -u env_vars.txt -o env_vars.txt
           echo "Found Spring properties:"
           cat env_vars.txt
-          echo "env_vars=$(cat env_vars.txt | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
+          echo "env_vars=$(jq -Rn '[inputs]' < env_vars.txt)" >> $GITHUB_OUTPUT
 
       - name: Validate Secrets
         id: validate-secrets
         run: |
-          gh secret list --json name | jq -r '.[].name' > secrets.txt
+          # Get secrets with pagination support (for large numbers of secrets)
+          gh api -X GET "/repos/${{ github.repository }}/actions/secrets" \
+            --jq '.secrets[].name' | sort > secrets.txt
           
-          # Find missing secrets
-          comm -23 env_vars.txt secrets.txt > missing.txt
-          missing_count=$(wc -l < missing.txt)
+          # Find missing secrets with better diff handling
+          grep -v -x -f secrets.txt env_vars.txt > missing.txt || true
+          missing_count=$(wc -l < missing.txt | xargs)
           
-          if [ $missing_count -gt 0 ]; then
+          if [ "$missing_count" -gt 0 ]; then
             echo "Adding $missing_count secrets..."
-            while read var; do
+            while IFS= read -r var; do
               # Try to get value from .env files first
-              val=$(grep -m1 "^$var=" whatsappclone/src/main/resources/*.properties 2>/dev/null | cut -d '=' -f2- || \
+              val=$(grep -m1 "^$var=" whatsappclone/src/main/resources/*.env* 2>/dev/null | cut -d '=' -f2- || \
                     echo "PLACEHOLDER_$(openssl rand -hex 6)")
-              gh secret set "$var" --body "$val"
+          
+              # Add secret with proper error handling
+              if ! gh secret set "$var" --body "$val"; then
+                echo "::error::Failed to add secret $var"
+                exit 1
+              fi
               echo "Added $var"
             done < missing.txt
           
             echo "::warning::New secrets added. Update placeholders in repo settings."
             echo "ready=false" >> $GITHUB_OUTPUT
-            echo "missing_vars=$(cat missing.txt | tr '\n' ',')" >> $GITHUB_OUTPUT
+            echo "missing_vars=$(paste -sd, missing.txt)" >> $GITHUB_OUTPUT
           else
             echo "ready=true" >> $GITHUB_OUTPUT
+            echo "missing_vars=none" >> $GITHUB_OUTPUT
           fi
 
       - name: Notify Slack
@@ -75,7 +93,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Action Required:* Update these placeholder secrets:"
+                    "text": "*Action Required:* Update these placeholder secrets in GitHub:"
                   }
                 },
                 {
@@ -133,9 +151,17 @@ jobs:
 
       - name: Verify JAR
         run: |
+          # Start application with test profile
           java -jar whatsappclone/target/*.jar --spring.profiles.active=ci &
-          sleep 60
-          curl -s http://localhost:8080/actuator/health | grep -q '"status":"UP"' || exit 1
+          APP_PID=$!
+          
+          # Wait for app to start (with timeout)
+          timeout 60 bash -c 'while ! curl -s http://localhost:8080/actuator/health | grep -q '"'"'"status":"UP"'"'"'; do sleep 2; done' || \
+            { echo "::error::Application failed to start"; kill $APP_PID; exit 1; }
+          
+          # Verify health endpoint
+          curl -s http://localhost:8080/actuator/health | jq .
+          kill $APP_PID
 
       - name: Docker Build & Push
         env:
