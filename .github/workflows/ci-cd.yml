@@ -25,15 +25,17 @@ jobs:
 
       - name: Authenticate GitHub CLI
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          mkdir -p ~/.config/gh
-          cat > ~/.config/gh/hosts.yml <<EOF
-          github.com:
-              user: gh-actions
-              oauth_token: $GH_TOKEN
-              git_protocol: https
-          EOF
+          if [ -z "$GH_PAT" ]; then
+            echo "::error::GH_PAT is not set"
+            exit 1
+          fi
+          
+          echo "$GH_PAT" > token.txt
+          gh auth login --with-token < token.txt
+          rm token.txt
+          
           gh auth status
           gh api user
 
@@ -47,19 +49,20 @@ jobs:
             -name "*.yaml" \
           \) -exec grep -Eho '\$\{[A-Z0-9_]+\}|@Value\("\\$\\{[A-Z0-9_]+\\}"' {} + | \
             grep -oE '[A-Z0-9_]+' | \
-            sort -u > env_vars.txt
+            sort -u | jq -R -s 'split("\n")[:-1]' > env_vars.json
           
-          JSON_VARS=$(jq -Rn '[inputs]' < env_vars.txt)
           echo "Found Spring properties:"
-          echo "$JSON_VARS"
-          echo "env_vars=${JSON_VARS}" >> $GITHUB_OUTPUT
-          echo "::set-output name=env_vars::${JSON_VARS}"
+          cat env_vars.json
+          echo "env_vars=$(cat env_vars.json)" >> $GITHUB_OUTPUT
 
       - name: Validate Secrets
         id: validate-secrets
         run: |
-          jq -r '.[]' <<< "${{ steps.scan-props.outputs.env_vars }}" > env_vars.txt
+          echo "${{ steps.scan-props.outputs.env_vars }}" > env_vars.json
+          jq -r '.[]' env_vars.json > env_vars.txt
+          
           gh secret list --json name | jq -r '.[].name' > secrets.txt
+          
           comm -23 env_vars.txt secrets.txt > missing.txt || true
           missing_count=$(wc -l < missing.txt | tr -d ' ')
           
