@@ -4,6 +4,10 @@ on:
   push:
     branches: [ master ]
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Enhanced Spring Boot CI/CD"]
+    types:
+      - completed
 
 jobs:
   secret-management:
@@ -34,7 +38,6 @@ jobs:
         id: scan-props
         run: |
           echo "🔍 Scanning for environment variables..."
-          
           find whatsappclone/src -type f \( \
             -name "*.java" -o \
             -name "*.properties" -o \
@@ -46,35 +49,24 @@ jobs:
 
           echo "📂 Extracted environment variables:"
           cat env_vars.json
-          
-          # Validate JSON to avoid formatting issues
+
           if ! jq empty env_vars.json > /dev/null 2>&1; then
             echo "❌ Invalid JSON detected in env_vars"
             exit 1
           fi
           
-          # Convert JSON array to a single-line string
           ENV_VARS_JSON=$(jq -c . env_vars.json)
           
-          # Save as GitHub Actions output (fixes invalid formatting issue)
           echo "env_vars=$ENV_VARS_JSON" >> $GITHUB_OUTPUT
 
       - name: Validate Secrets
         id: validate-secrets
         run: |
           echo "🔎 Validating secrets..."
-          
-          # Read extracted variables from previous step
-          echo "Extracted JSON from scan-props step:"
-          echo '${{ steps.scan-props.outputs.env_vars }}'
-
-          # Convert JSON string back to an array
           echo '${{ steps.scan-props.outputs.env_vars }}' | jq -r '.[]' > env_vars.txt
           
-          # Fetch existing GitHub secrets
           gh secret list --json name | jq -r '.[].name' > secrets.txt
           
-          # Find missing secrets
           grep -vxFf secrets.txt env_vars.txt > missing.txt || true
           missing_count=$(wc -l < missing.txt | tr -d ' ')
           
@@ -91,19 +83,27 @@ jobs:
 
       - name: Auto-Add Missing Secrets
         if: steps.validate-secrets.outputs.ready == 'false'
+        id: add-secrets
         run: |
           echo "⚙️ Adding missing secrets..."
+          SUCCESS=true
+          
           while IFS= read -r var; do
-            # Attempt to extract the value from .env files, or generate a placeholder if not found
             value=$(grep -m1 "^$var=" whatsappclone/src/main/resources/*.env* 2>/dev/null | cut -d '=' -f2- || echo "PLACEHOLDER_$(openssl rand -hex 8)")
-            echo "Adding $var with value $value..."
+            echo "Adding $var..."
+          
             if gh secret set "$var" --body "$value"; then
-              echo "✅ Added $var"
+              echo "✅ Successfully added $var"
             else
-              echo "::error:: Failed to add secret $var"
-              exit 1
+              echo "::error:: ❌ Failed to add $var"
+              SUCCESS=false
             fi
           done < missing.txt
+          
+          if [ "$SUCCESS" = "false" ]; then
+            echo "⚠️ Some secrets failed to be added. Build will NOT continue."
+            exit 1
+          fi
 
       - name: Generate GitHub Actions Summary
         if: steps.validate-secrets.outputs.ready == 'false'
@@ -116,6 +116,15 @@ jobs:
           done < missing.txt
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "🔗 **[Click here to update your secrets](https://github.com/${{ github.repository }}/settings/secrets/actions)**" >> $GITHUB_STEP_SUMMARY
+
+      - name: Re-run Workflow to Continue Build
+        if: steps.validate-secrets.outputs.ready == 'false' && success()
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          echo "🔄 Re-running workflow to continue build..."
+          gh workflow run "Enhanced Spring Boot CI/CD" -R "${{ github.repository }}"
+          echo "✅ Workflow triggered again!"
 
   build-and-deploy:
     name: Build & Deploy
