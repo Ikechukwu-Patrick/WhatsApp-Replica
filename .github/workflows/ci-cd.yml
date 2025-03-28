@@ -15,9 +15,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install GitHub CLI (Official Method)
+      - name: Install GitHub CLI
         run: |
-          # Clean install from official repository
           sudo apt-get remove -y gh || true
           curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
@@ -28,13 +27,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          echo "$GH_TOKEN" | gh auth login --with-token
+          echo "$GH_TOKEN" > token.txt
+          gh auth login --with-token < token.txt
+          rm token.txt
           gh auth status
 
       - name: Scan Spring Boot Properties
         id: scan-props
         run: |
-          # Comprehensive scanning with better pattern matching
+          # Improved scanning with proper JSON output
           find whatsappclone/src -type f \( \
             -name "*.java" -o \
             -name "*.properties" -o \
@@ -42,22 +43,27 @@ jobs:
             -name "*.yaml" \
           \) -exec grep -Eho '\$\{[A-Z0-9_]+\}|@Value\("\\$\\{[A-Z0-9_]+\\}"' {} + | \
             grep -oE '[A-Z0-9_]+' | \
-            sort -u > env_vars.txt
+            sort -u | jq -R -s 'split("\n")[:-1]' > env_vars.json
           
           echo "Found Spring properties:"
-          cat env_vars.txt
-          echo "env_vars=$(jq -Rn '[inputs]' < env_vars.txt)" >> $GITHUB_OUTPUT
+          cat env_vars.json
+          
+          # Set output using proper JSON format
+          echo "env_vars=$(cat env_vars.json)" >> $GITHUB_OUTPUT
 
       - name: Validate Secrets
         id: validate-secrets
         run: |
-          # Get secrets with pagination support
-          gh api -X GET "/repos/${{ github.repository }}/actions/secrets" \
-            --jq '.secrets[].name' | sort > secrets.txt
+          # Read environment variables from previous step
+          echo "${{ steps.scan-props.outputs.env_vars }}" > env_vars.json
+          jq -r '.[]' env_vars.json > env_vars.txt
           
-          # Find missing secrets with better diff handling
-          grep -v -x -f secrets.txt env_vars.txt > missing.txt || true
-          missing_count=$(wc -l < missing.txt | xargs)
+          # Get current secrets
+          gh secret list --json name | jq -r '.[].name' > secrets.txt
+          
+          # Find missing secrets
+          comm -23 env_vars.txt secrets.txt > missing.txt || true
+          missing_count=$(wc -l < missing.txt | tr -d ' ')
           
           if [ "$missing_count" -gt 0 ]; then
             echo "Adding $missing_count secrets..."
@@ -66,7 +72,6 @@ jobs:
               val=$(grep -m1 "^$var=" whatsappclone/src/main/resources/*.env* 2>/dev/null | cut -d '=' -f2- || \
                     echo "PLACEHOLDER_$(openssl rand -hex 8)")
           
-              # Add secret with error handling
               if ! gh secret set "$var" --body "$val"; then
                 echo "::error::Failed to add secret $var"
                 exit 1
@@ -152,16 +157,10 @@ jobs:
 
       - name: Verify JAR
         run: |
-          # Start application with test profile
           java -jar whatsappclone/target/*.jar --spring.profiles.active=ci &
           APP_PID=$!
-          
-          # Wait for app to start (with timeout)
-          timeout 60 bash -c 'while ! curl -s http://localhost:8080/actuator/health | grep -q '"'"'"status":"UP"'"'"'; do sleep 2; done' || \
-            { echo "::error::Application failed to start"; kill $APP_PID; exit 1; }
-          
-          # Verify health endpoint
-          curl -s http://localhost:8080/actuator/health | jq .
+          sleep 30
+          curl -s http://localhost:8080/actuator/health | grep -q '"status":"UP"' || { echo "::error::Application failed to start"; kill $APP_PID; exit 1; }
           kill $APP_PID
 
       - name: Docker Build & Push
