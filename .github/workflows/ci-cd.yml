@@ -34,6 +34,7 @@ jobs:
         id: scan-props
         run: |
           echo "🔍 Scanning for environment variables..."
+          
           find whatsappclone/src -type f \( \
             -name "*.java" -o \
             -name "*.properties" -o \
@@ -42,38 +43,38 @@ jobs:
           \) -exec grep -Eho '\$\{[A-Z0-9_]+\}|@Value\("\\$\\{[A-Z0-9_]+\\}"' {} + | \
             grep -oE '[A-Z0-9_]+' | \
             sort -u | jq -R . | jq -s . > env_vars.json
-          
+
           echo "📂 Extracted environment variables:"
           cat env_vars.json
           
-          # Validate JSON before proceeding
+          # Validate JSON to avoid formatting issues
           if ! jq empty env_vars.json > /dev/null 2>&1; then
             echo "❌ Invalid JSON detected in env_vars"
             exit 1
           fi
-
-          # Set GitHub Actions output properly
-          echo "env_vars=$(cat env_vars.json)" >> $GITHUB_OUTPUT
+          
+          # Convert JSON array to a single-line string
+          ENV_VARS_JSON=$(jq -c . env_vars.json)
+          
+          # Save as GitHub Actions output (fixes invalid formatting issue)
+          echo "env_vars=$ENV_VARS_JSON" >> $GITHUB_OUTPUT
 
       - name: Validate Secrets
         id: validate-secrets
         run: |
           echo "🔎 Validating secrets..."
           
-          # Read scanned environment variables
+          # Read extracted variables from previous step
           echo "Extracted JSON from scan-props step:"
-          echo "${{ steps.scan-props.outputs.env_vars }}"
-          
-          # Store valid JSON in a file
-          echo '${{ steps.scan-props.outputs.env_vars }}' | jq '.' > env_vars.json
+          echo '${{ steps.scan-props.outputs.env_vars }}'
 
-          # Extract individual variable names from JSON
-          jq -r '.[]' env_vars.json > env_vars.txt
+          # Convert JSON string back to an array
+          echo '${{ steps.scan-props.outputs.env_vars }}' | jq -r '.[]' > env_vars.txt
           
           # Fetch existing GitHub secrets
           gh secret list --json name | jq -r '.[].name' > secrets.txt
           
-          # Find missing secrets by comparing the two lists
+          # Find missing secrets
           grep -vxFf secrets.txt env_vars.txt > missing.txt || true
           missing_count=$(wc -l < missing.txt | tr -d ' ')
           
