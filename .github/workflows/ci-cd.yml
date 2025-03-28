@@ -4,6 +4,10 @@ on:
   push:
     branches: [ master ]
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Enhanced Spring Boot CI/CD"]
+    types:
+      - completed
 
 jobs:
   secret-management:
@@ -101,22 +105,6 @@ jobs:
             exit 1
           fi
 
-          # Since we successfully added secrets, approve build
-          echo "✅ Secrets successfully added, approving build!"
-          echo "ready=true" >> $GITHUB_OUTPUT
-
-      - name: Generate GitHub Actions Summary
-        if: steps.validate-secrets.outputs.ready == 'false'
-        run: |
-          echo "### 🚨 New Secrets Added to GitHub 🚨" >> $GITHUB_STEP_SUMMARY
-          echo "The following secrets were automatically added:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          while IFS= read -r secret; do
-            echo "- \`$secret\`" >> $GITHUB_STEP_SUMMARY
-          done < missing.txt
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🔗 **[Click here to update your secrets](https://github.com/${{ github.repository }}/settings/secrets/actions)**" >> $GITHUB_STEP_SUMMARY
-
   build-and-deploy:
     name: Build & Deploy
     needs: secret-management
@@ -146,6 +134,16 @@ jobs:
       - name: Build with Maven
         working-directory: whatsappclone
         run: mvn clean package -DskipTests
+
+      - name: Debug Resources Directory
+        run: ls -l whatsappclone/src/main/resources/
+
+      - name: Create secret.properties (If Missing)
+        run: |
+          echo "SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }}" > whatsappclone/src/main/resources/secret.properties
+          echo "SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }}" >> whatsappclone/src/main/resources/secret.properties
+          echo "SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }}" >> whatsappclone/src/main/resources/secret.properties
+          echo "✅ secret.properties created."
 
       - name: Verify JAR
         run: |
