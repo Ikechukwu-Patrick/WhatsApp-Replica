@@ -33,7 +33,8 @@ jobs:
       - name: Scan Spring Boot Properties
         id: scan-props
         run: |
-          # Scan and output as properly formatted JSON
+          echo "🔍 Scanning for environment variables..."
+          
           find whatsappclone/src -type f \( \
             -name "*.java" -o \
             -name "*.properties" -o \
@@ -41,43 +42,38 @@ jobs:
             -name "*.yaml" \
           \) -exec grep -Eho '\$\{[A-Z0-9_]+\}|@Value\("\\$\\{[A-Z0-9_]+\\}"' {} + | \
             grep -oE '[A-Z0-9_]+' | \
-            sort -u | jq -R -s -c 'split("\n")[:-1]' > env_vars.json
+            sort -u | jq -R -s -c 'split("\n") | map(select(. != ""))' > env_vars.json
           
-          echo "Found Spring properties:"
+          echo "📂 Extracted environment variables:"
           cat env_vars.json
+          
           echo "env_vars=$(cat env_vars.json)" >> $GITHUB_OUTPUT
 
       - name: Validate Secrets
         id: validate-secrets
         run: |
-          # Process the JSON input correctly
-          echo "${{ steps.scan-props.outputs.env_vars }}" > env_vars.json
+          echo "🔎 Validating secrets..."
+          
+          cat env_vars.json  # Debugging step: Check extracted JSON
+          jq . env_vars.json  # Validate JSON structure
+          
+          # Extract environment variable names
           jq -r '.[]' env_vars.json > env_vars.txt
           
-          # Get current secrets
+          # Fetch existing GitHub secrets
           gh secret list --json name | jq -r '.[].name' > secrets.txt
           
-          # Find missing secrets using reliable comparison
-          comm -23 <(sort env_vars.txt) <(sort secrets.txt) > missing.txt || true
+          # Find missing secrets
+          grep -vxFf secrets.txt env_vars.txt > missing.txt || true
           missing_count=$(wc -l < missing.txt | tr -d ' ')
           
           if [ "$missing_count" -gt 0 ]; then
-            echo "Adding $missing_count secrets..."
-            while IFS= read -r var; do
-              val=$(grep -m1 "^$var=" whatsappclone/src/main/resources/*.env* 2>/dev/null | cut -d '=' -f2- || \
-                    echo "PLACEHOLDER_$(openssl rand -hex 8)")
-          
-              if ! gh secret set "$var" --body "$val"; then
-                echo "::error::Failed to add secret $var"
-                exit 1
-              fi
-              echo "Added $var"
-            done < missing.txt
-          
-            echo "::warning::New secrets added. Update placeholders in repo settings."
+            echo "⚠️ Missing secrets found: $missing_count"
+            cat missing.txt
             echo "ready=false" >> $GITHUB_OUTPUT
-            echo "missing_vars=$(paste -sd, missing.txt)" >> $GITHUB_OUTPUT
+            echo "missing_vars=$(tr '\n' ',' < missing.txt | sed 's/,$//')" >> $GITHUB_OUTPUT
           else
+            echo "✅ All secrets are present."
             echo "ready=true" >> $GITHUB_OUTPUT
             echo "missing_vars=none" >> $GITHUB_OUTPUT
           fi
