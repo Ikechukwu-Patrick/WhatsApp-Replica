@@ -4,10 +4,6 @@ on:
   push:
     branches: [ master ]
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Enhanced Spring Boot CI/CD"]
-    types:
-      - completed
 
 jobs:
   secret-management:
@@ -15,7 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       build_approved: ${{ steps.validate-secrets.outputs.ready }}
-      missing_vars: ${{ steps.validate-secrets.outputs.missing_vars }}
     steps:
       - uses: actions/checkout@v4
 
@@ -55,15 +50,13 @@ jobs:
             exit 1
           fi
           
-          ENV_VARS_JSON=$(jq -c . env_vars.json)
-          
-          echo "env_vars=$ENV_VARS_JSON" >> $GITHUB_OUTPUT
+          echo "env_vars=$(jq -c . env_vars.json)" >> $GITHUB_ENV
 
       - name: Validate Secrets
         id: validate-secrets
         run: |
           echo "🔎 Validating secrets..."
-          echo '${{ steps.scan-props.outputs.env_vars }}' | jq -r '.[]' > env_vars.txt
+          echo '${{ env.env_vars }}' | jq -r '.[]' > env_vars.txt
           
           gh secret list --json name | jq -r '.[].name' > secrets.txt
           
@@ -74,46 +67,27 @@ jobs:
             echo "⚠️ Missing secrets found: $missing_count"
             cat missing.txt
             echo "ready=false" >> $GITHUB_OUTPUT
-            echo "missing_vars=$(tr '\n' ',' < missing.txt | sed 's/,$//')" >> $GITHUB_OUTPUT
           else
-            echo "✅ All required secrets are present. Good job, engineers! 🎉"
+            echo "✅ All required secrets are present."
             echo "ready=true" >> $GITHUB_OUTPUT
-            echo "missing_vars=none" >> $GITHUB_OUTPUT
           fi
 
       - name: Auto-Add Missing Secrets
         if: steps.validate-secrets.outputs.ready == 'false'
-        id: add-secrets
         run: |
           echo "⚙️ Adding missing secrets..."
-          SUCCESS=true
-          
           while IFS= read -r var; do
-            value=$(grep -m1 "^$var=" whatsappclone/src/main/resources/*.env* 2>/dev/null | cut -d '=' -f2- || echo "PLACEHOLDER_$(openssl rand -hex 8)")
+            value="PLACEHOLDER_$(openssl rand -hex 8)"
             echo "Adding $var..."
-          
-            if gh secret set "$var" --body "$value"; then
-              echo "✅ Successfully added $var"
-            else
-              echo "::error:: ❌ Failed to add $var"
-              SUCCESS=false
-            fi
+            gh secret set "$var" --body "$value"
           done < missing.txt
-          
-          if [ "$SUCCESS" = "false" ]; then
-            echo "⚠️ Some secrets failed to be added. Build will NOT continue."
-            exit 1
-          fi
+          echo "✅ Secrets successfully added."
 
   build-and-deploy:
     name: Build & Deploy
     needs: secret-management
     if: needs.secret-management.outputs.build_approved == 'true'
     runs-on: ubuntu-latest
-    env:
-      SPRING_DATASOURCE_URL: ${{ secrets.SPRING_DATASOURCE_URL }}
-      SPRING_DATASOURCE_USERNAME: ${{ secrets.SPRING_DATASOURCE_USERNAME }}
-      SPRING_DATASOURCE_PASSWORD: ${{ secrets.SPRING_DATASOURCE_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -134,16 +108,6 @@ jobs:
       - name: Build with Maven
         working-directory: whatsappclone
         run: mvn clean package -DskipTests
-
-      - name: Debug Resources Directory
-        run: ls -l whatsappclone/src/main/resources/
-
-      - name: Create secret.properties (If Missing)
-        run: |
-          echo "SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }}" > whatsappclone/src/main/resources/secret.properties
-          echo "SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }}" >> whatsappclone/src/main/resources/secret.properties
-          echo "SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }}" >> whatsappclone/src/main/resources/secret.properties
-          echo "✅ secret.properties created."
 
       - name: Verify JAR
         run: |
