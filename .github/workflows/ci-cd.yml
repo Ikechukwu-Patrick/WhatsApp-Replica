@@ -27,21 +27,13 @@ jobs:
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          if [ -z "$GH_PAT" ]; then
-            echo "::error::GH_PAT is not set"
-            exit 1
-          fi
-          
-          echo "$GH_PAT" > token.txt
-          gh auth login --with-token < token.txt
-          rm token.txt
-          
+          echo "$GH_PAT" | gh auth login --with-token
           gh auth status
-          gh api user
 
       - name: Scan Spring Boot Properties
         id: scan-props
         run: |
+          # Scan and format output as single-line JSON
           find whatsappclone/src -type f \( \
             -name "*.java" -o \
             -name "*.properties" -o \
@@ -49,21 +41,25 @@ jobs:
             -name "*.yaml" \
           \) -exec grep -Eho '\$\{[A-Z0-9_]+\}|@Value\("\\$\\{[A-Z0-9_]+\\}"' {} + | \
             grep -oE '[A-Z0-9_]+' | \
-            sort -u | jq -R -s 'split("\n")[:-1]' > env_vars.json
+            sort -u | jq -R -s -c 'split("\n")[:-1]' > env_vars.json
           
           echo "Found Spring properties:"
           cat env_vars.json
+          
+          # Set output using proper JSON format
           echo "env_vars=$(cat env_vars.json)" >> $GITHUB_OUTPUT
 
       - name: Validate Secrets
         id: validate-secrets
         run: |
-          echo "${{ steps.scan-props.outputs.env_vars }}" > env_vars.json
-          jq -r '.[]' env_vars.json > env_vars.txt
+          # Read and process environment variables
+          echo "${{ steps.scan-props.outputs.env_vars }}" | jq -r '.[]' > env_vars.txt
           
+          # Get current secrets
           gh secret list --json name | jq -r '.[].name' > secrets.txt
           
-          comm -23 env_vars.txt secrets.txt > missing.txt || true
+          # Find missing secrets
+          grep -vxFf secrets.txt env_vars.txt > missing.txt || true
           missing_count=$(wc -l < missing.txt | tr -d ' ')
           
           if [ "$missing_count" -gt 0 ]; then
@@ -81,7 +77,7 @@ jobs:
           
             echo "::warning::New secrets added. Update placeholders in repo settings."
             echo "ready=false" >> $GITHUB_OUTPUT
-            echo "missing_vars=$(paste -sd, missing.txt)" >> $GITHUB_OUTPUT
+            echo "missing_vars=$(tr '\n' ',' < missing.txt | sed 's/,$//')" >> $GITHUB_OUTPUT
           else
             echo "ready=true" >> $GITHUB_OUTPUT
             echo "missing_vars=none" >> $GITHUB_OUTPUT
