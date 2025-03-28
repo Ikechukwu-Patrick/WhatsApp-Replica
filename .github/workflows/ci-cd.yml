@@ -41,18 +41,18 @@ jobs:
             -name "*.yaml" \
           \) -exec grep -Eho '\$\{[A-Z0-9_]+\}|@Value\("\\$\\{[A-Z0-9_]+\\}"' {} + | \
             grep -oE '[A-Z0-9_]+' | \
-            sort -u | jq -R -s -c 'split("\n") | map(select(. != ""))' > env_vars.json
+            sort -u | jq -R . | jq -s . > env_vars.json
           
           echo "📂 Extracted environment variables:"
           cat env_vars.json
-
-          # Ensure the JSON is valid
+          
+          # Validate JSON before proceeding
           if ! jq empty env_vars.json > /dev/null 2>&1; then
-            echo "::error:: Invalid JSON detected in env_vars"
+            echo "❌ Invalid JSON detected in env_vars"
             exit 1
           fi
-          
-          # Set output
+
+          # Set GitHub Actions output properly
           echo "env_vars=$(cat env_vars.json)" >> $GITHUB_OUTPUT
 
       - name: Validate Secrets
@@ -60,33 +60,23 @@ jobs:
         run: |
           echo "🔎 Validating secrets..."
           
-          # Debugging: Print the extracted environment variables
+          # Read scanned environment variables
           echo "Extracted JSON from scan-props step:"
-          echo "${{ steps.scan-props.outputs.env_vars }}" > debug_env_vars.json
-          cat debug_env_vars.json
+          echo "${{ steps.scan-props.outputs.env_vars }}"
+          
+          # Store valid JSON in a file
+          echo '${{ steps.scan-props.outputs.env_vars }}' | jq '.' > env_vars.json
 
-          # Ensure JSON is valid before parsing
-          if ! jq empty debug_env_vars.json > /dev/null 2>&1; then
-            echo "::error:: Invalid JSON detected in env_vars"
-            exit 1
-          fi
-
-          # Convert JSON list to plain text
-          jq -r '.[]' debug_env_vars.json > env_vars.txt
-
+          # Extract individual variable names from JSON
+          jq -r '.[]' env_vars.json > env_vars.txt
+          
           # Fetch existing GitHub secrets
           gh secret list --json name | jq -r '.[].name' > secrets.txt
-
-          # Debugging: Print existing secrets
-          echo "Extracted env variables:"
-          cat env_vars.txt
-          echo "Existing GitHub secrets:"
-          cat secrets.txt
-
-          # Find missing secrets
+          
+          # Find missing secrets by comparing the two lists
           grep -vxFf secrets.txt env_vars.txt > missing.txt || true
           missing_count=$(wc -l < missing.txt | tr -d ' ')
-
+          
           if [ "$missing_count" -gt 0 ]; then
             echo "⚠️ Missing secrets found: $missing_count"
             cat missing.txt
@@ -103,8 +93,9 @@ jobs:
         run: |
           echo "⚙️ Adding missing secrets..."
           while IFS= read -r var; do
+            # Attempt to extract the value from .env files, or generate a placeholder if not found
             value=$(grep -m1 "^$var=" whatsappclone/src/main/resources/*.env* 2>/dev/null | cut -d '=' -f2- || echo "PLACEHOLDER_$(openssl rand -hex 8)")
-            echo "Adding $var..."
+            echo "Adding $var with value $value..."
             if gh secret set "$var" --body "$value"; then
               echo "✅ Added $var"
             else
