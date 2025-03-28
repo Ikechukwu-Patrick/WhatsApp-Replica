@@ -5,9 +5,6 @@ on:
     branches: [ master ]
   workflow_dispatch:
 
-env:
-  GH_CLI_VERSION: "2.47.0"
-
 jobs:
   secret-management:
     name: Secret Synchronization
@@ -18,22 +15,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install GitHub CLI (Cross-Platform)
+      - name: Install GitHub CLI (Official Method)
         run: |
-          # Download and install GitHub CLI directly from releases
-          wget https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/gh_${GH_CLI_VERSION}_linux_amd64.deb
-          sudo dpkg -i gh_${GH_CLI_VERSION}_linux_amd64.deb || sudo apt-get install -f -y
-          rm gh_${GH_CLI_VERSION}_linux_amd64.deb
+          # Clean install from official repository
+          sudo apt-get remove -y gh || true
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt update
+          sudo apt install -y gh
 
       - name: Authenticate GitHub CLI
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          echo "${{ secrets.GH_TOKEN }}" | gh auth login --with-token
+          echo "$GH_TOKEN" | gh auth login --with-token
           gh auth status
 
       - name: Scan Spring Boot Properties
         id: scan-props
         run: |
-          # Improved scanning with better pattern matching
+          # Comprehensive scanning with better pattern matching
           find whatsappclone/src -type f \( \
             -name "*.java" -o \
             -name "*.properties" -o \
@@ -50,7 +51,7 @@ jobs:
       - name: Validate Secrets
         id: validate-secrets
         run: |
-          # Get secrets with pagination support (for large numbers of secrets)
+          # Get secrets with pagination support
           gh api -X GET "/repos/${{ github.repository }}/actions/secrets" \
             --jq '.secrets[].name' | sort > secrets.txt
           
@@ -63,9 +64,9 @@ jobs:
             while IFS= read -r var; do
               # Try to get value from .env files first
               val=$(grep -m1 "^$var=" whatsappclone/src/main/resources/*.env* 2>/dev/null | cut -d '=' -f2- || \
-                    echo "PLACEHOLDER_$(openssl rand -hex 6)")
+                    echo "PLACEHOLDER_$(openssl rand -hex 8)")
           
-              # Add secret with proper error handling
+              # Add secret with error handling
               if ! gh secret set "$var" --body "$val"; then
                 echo "::error::Failed to add secret $var"
                 exit 1
