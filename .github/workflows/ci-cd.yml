@@ -72,7 +72,7 @@ jobs:
             echo "ready=false" >> $GITHUB_OUTPUT
             echo "missing_vars=$(tr '\n' ',' < missing.txt | sed 's/,$//')" >> $GITHUB_OUTPUT
           else
-            echo "✅ All required secrets are present."
+            echo "✅ All required secrets are present. Good job, engineers! 🎉"
             echo "ready=true" >> $GITHUB_OUTPUT
             echo "missing_vars=none" >> $GITHUB_OUTPUT
           fi
