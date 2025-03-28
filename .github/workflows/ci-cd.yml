@@ -4,10 +4,6 @@ on:
   push:
     branches: [ master ]
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Enhanced Spring Boot CI/CD"]
-    types:
-      - completed
 
 jobs:
   secret-management:
@@ -105,6 +101,10 @@ jobs:
             exit 1
           fi
 
+          # Since we successfully added secrets, approve build
+          echo "✅ Secrets successfully added, approving build!"
+          echo "ready=true" >> $GITHUB_OUTPUT
+
       - name: Generate GitHub Actions Summary
         if: steps.validate-secrets.outputs.ready == 'false'
         run: |
@@ -116,15 +116,6 @@ jobs:
           done < missing.txt
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "🔗 **[Click here to update your secrets](https://github.com/${{ github.repository }}/settings/secrets/actions)**" >> $GITHUB_STEP_SUMMARY
-
-      - name: Re-run Workflow to Continue Build
-        if: steps.validate-secrets.outputs.ready == 'false' && success()
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-        run: |
-          echo "🔄 Re-running workflow to continue build..."
-          gh workflow run "Enhanced Spring Boot CI/CD" -R "${{ github.repository }}"
-          echo "✅ Workflow triggered again!"
 
   build-and-deploy:
     name: Build & Deploy
