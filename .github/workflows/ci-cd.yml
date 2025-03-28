@@ -10,8 +10,7 @@ jobs:
     name: Secret Synchronization
     runs-on: ubuntu-latest
     outputs:
-      build_approved: ${{ steps.validate-secrets.outputs.ready }}
-      missing_vars: ${{ steps.validate-secrets.outputs.missing_vars }}
+      build_approved: ${{ steps.final-status.outputs.ready }}
     steps:
       - uses: actions/checkout@v4
 
@@ -53,13 +52,13 @@ jobs:
           
           ENV_VARS_JSON=$(jq -c . env_vars.json)
           
-          echo "env_vars=$ENV_VARS_JSON" >> $GITHUB_OUTPUT
+          echo "env_vars=$ENV_VARS_JSON" >> $GITHUB_ENV
 
       - name: Validate Secrets
         id: validate-secrets
         run: |
           echo "🔎 Validating secrets..."
-          echo '${{ steps.scan-props.outputs.env_vars }}' | jq -r '.[]' > env_vars.txt
+          echo "${{ env.env_vars }}" | jq -r '.[]' > env_vars.txt
           
           gh secret list --json name | jq -r '.[].name' > secrets.txt
           
@@ -69,17 +68,14 @@ jobs:
           if [ "$missing_count" -gt 0 ]; then
             echo "⚠️ Missing secrets found: $missing_count"
             cat missing.txt
-            echo "ready=false" >> $GITHUB_OUTPUT
-            echo "missing_vars=$(tr '\n' ',' < missing.txt | sed 's/,$//')" >> $GITHUB_OUTPUT
+            echo "ready=false" >> $GITHUB_ENV
           else
             echo "✅ All required secrets are present."
-            echo "ready=true" >> $GITHUB_OUTPUT
-            echo "missing_vars=none" >> $GITHUB_OUTPUT
+            echo "ready=true" >> $GITHUB_ENV
           fi
 
       - name: Auto-Add Missing Secrets
-        if: steps.validate-secrets.outputs.ready == 'false'
-        id: add-secrets
+        if: env.ready == 'false'
         run: |
           echo "⚙️ Adding missing secrets..."
           SUCCESS=true
@@ -101,21 +97,14 @@ jobs:
             exit 1
           fi
 
-          # Since we successfully added secrets, approve build
+          # Mark build as approved after successfully adding secrets
           echo "✅ Secrets successfully added, approving build!"
-          echo "ready=true" >> $GITHUB_OUTPUT
+          echo "ready=true" >> $GITHUB_ENV
 
-      - name: Generate GitHub Actions Summary
-        if: steps.validate-secrets.outputs.ready == 'false'
+      - name: Finalize Secret Validation Output
+        id: final-status
         run: |
-          echo "### 🚨 New Secrets Added to GitHub 🚨" >> $GITHUB_STEP_SUMMARY
-          echo "The following secrets were automatically added:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          while IFS= read -r secret; do
-            echo "- \`$secret\`" >> $GITHUB_STEP_SUMMARY
-          done < missing.txt
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🔗 **[Click here to update your secrets](https://github.com/${{ github.repository }}/settings/secrets/actions)**" >> $GITHUB_STEP_SUMMARY
+          echo "ready=${{ env.ready }}" >> $GITHUB_OUTPUT
 
   build-and-deploy:
     name: Build & Deploy
