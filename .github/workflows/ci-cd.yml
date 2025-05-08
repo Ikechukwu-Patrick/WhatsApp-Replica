@@ -1,130 +1,89 @@
-name: Enhanced Spring Boot CI/CD
+name: Build and Deploy App
 
 on:
   push:
-    branches: [ master ]
-  workflow_dispatch:
+    branches:
+      - master
 
 jobs:
   secret-management:
-    name: Secret Synchronization
     runs-on: ubuntu-latest
     outputs:
-      build_approved: ${{ steps.validate-secrets.outputs.ready }}
+      build_approved: ${{ steps.check-secrets.outputs.build_approved }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repo
+        uses: actions/checkout@v4
 
-      - name: Install GitHub CLI
+      - name: Load required env vars
+        id: load-env
         run: |
-          sudo apt-get remove -y gh || true
-          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-          sudo apt update
-          sudo apt install -y gh
+          echo "REQUIRED_VARS=$(cat .github/env_vars.txt | tr '\n' ' ')" >> $GITHUB_OUTPUT
 
-      - name: Authenticate GitHub CLI
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
+      - name: Check for required secrets
+        id: check-secrets
         run: |
-          echo "$GH_PAT" | gh auth login --with-token
-          gh auth status
-
-      - name: Scan Spring Boot Properties
-        id: scan-props
-        run: |
-          echo "🔍 Scanning for environment variables..."
-          find whatsappclone/src -type f \( \
-            -name "*.java" -o \
-            -name "*.properties" -o \
-            -name "*.yml" -o \
-            -name "*.yaml" \
-          \) -exec grep -Eho '\$\{[A-Z0-9_]+\}|@Value\("\\$\\{[A-Z0-9_]+\\}"' {} + | \
-            grep -oE '[A-Z0-9_]+' | \
-            sort -u | jq -R . | jq -s . > env_vars.json
-
-          echo "📂 Extracted environment variables:"
-          cat env_vars.json
-
-          if ! jq empty env_vars.json > /dev/null 2>&1; then
-            echo "❌ Invalid JSON detected in env_vars"
-            exit 1
-          fi
-
-          echo "env_vars=$(jq -c . env_vars.json)" >> $GITHUB_ENV
-
-      - name: Validate Secrets
-        id: validate-secrets
-        run: |
-          echo "🔎 Validating secrets..."
-          echo '${{ env.env_vars }}' | jq -r '.[]' > env_vars.txt
-          
-          gh secret list --json name | jq -r '.[].name' > secrets.txt
-          
-          grep -vxFf secrets.txt env_vars.txt > missing.txt || true
-          missing_count=$(wc -l < missing.txt | tr -d ' ')
-          
-          if [ "$missing_count" -gt 0 ]; then
-            echo "⚠️ Missing secrets found: $missing_count"
-            cat missing.txt
-            echo "ready=false" >> $GITHUB_OUTPUT
-          else
-            echo "✅ All required secrets are present. Good job, Cloud engineers! 🎉"
-            echo "ready=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Auto-Add Missing Secrets
-        if: steps.validate-secrets.outputs.ready == 'false'
-        run: |
-          echo "⚙️ Adding missing secrets..."
-          while IFS= read -r var; do
-            value="PLACEHOLDER_$(openssl rand -hex 8)"
-            echo "Adding $var..."
-            gh secret set "$var" --body "$value"
-          done < missing.txt
-          echo "✅ Secrets successfully added."
+          build_approved=true
+          for var in ${{ steps.load-env.outputs.REQUIRED_VARS }}; do
+            if [[ -z "${{ secrets[$var] }}" ]]; then
+              echo "Missing secret: $var"
+              echo "::warning file=.github/env_vars.txt::Missing secret $var"
+              build_approved=false
+              echo "Creating placeholder for $var"
+              echo "${var}=placeholder" >> $GITHUB_ENV
+            else
+              echo "${var}=${{ secrets[$var] }}" >> $GITHUB_ENV
+            fi
+          done
+          echo "build_approved=$build_approved" >> $GITHUB_OUTPUT
 
   build-and-deploy:
-    name: Build & Deploy
+    runs-on: ubuntu-latest
     needs: secret-management
     if: needs.secret-management.outputs.build_approved == 'true'
-    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: app_db
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/app_db
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: password
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Show approved value
-        run: echo "✅ build_approved = ${{ needs.secret-management.outputs.build_approved }}"
-
-      - name: Set up JDK 17
+      - name: Set up Java
         uses: actions/setup-java@v3
         with:
-          distribution: 'temurin'
           java-version: '17'
+          distribution: 'temurin'
 
-      - name: Cache Maven dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.m2
-            whatsappclone/target
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-
-      - name: Inject secret.properties
+      - name: Wait for PostgreSQL to be ready
         run: |
-          mkdir -p whatsappclone/src/main/resources
-          cat <<EOF > whatsappclone/src/main/resources/secret.properties
-          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-          API_KEY=${{ secrets.API_KEY }}
-          # Add more variables as needed
-          EOF
+          echo "Waiting for PostgreSQL to be ready..."
+          for i in {1..10}; do
+            if pg_isready -h localhost -p 5432 > /dev/null 2>&1; then
+              echo "PostgreSQL is ready!"
+              break
+            fi
+            echo "Waiting ($i)..."
+            sleep 5
+          done
 
-      - name: Build with Maven
-        working-directory: whatsappclone
-        run: mvn clean package -DskipTests
+      - name: Build app
+        run: ./gradlew clean build
 
-      - name: Verify JAR
-        run: |
-          java -jar whatsappclone/target/*.jar --spring.profiles.active=ci &
-          APP_PID=$!
-          timeout 60 bash -c 'while ! curl -s http://localhost:8080/actuator/health | grep -q '"'"'"status":"UP"'"'"'; do sleep 2; done' || { echo "::error::Application failed to start"; kill $APP_PID || true; exit 1; }
-          curl -s http://localhost:8080/actuator/health | jq .
-          kill $APP_PID || true
+      - name: Deploy app
+        run: echo "🚀 Deploying..."
