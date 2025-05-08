@@ -21,19 +21,20 @@ jobs:
 
       - name: Check for required secrets
         id: check-secrets
+        env:
+          # Export all available secrets
+          ALL_SECRETS: ${{ toJson(secrets) }}
         run: |
           build_approved=true
-          for var in ${{ steps.load-env.outputs.REQUIRED_VARS }}; do
-            if [[ -z "${{ secrets[$var] }}" ]]; then
-              echo "Missing secret: $var"
-              echo "::warning file=.github/env_vars.txt::Missing secret $var"
-              build_approved=false
-              echo "Creating placeholder for $var"
-              echo "${var}=placeholder" >> $GITHUB_ENV
+          while read -r var; do
+            if printenv "$var" | grep -q .; then
+              echo "$var=$(printenv $var)" >> $GITHUB_ENV
             else
-              echo "${var}=${{ secrets[$var] }}" >> $GITHUB_ENV
+              echo "::warning::Missing secret $var"
+              build_approved=false
+              echo "$var=placeholder" >> $GITHUB_ENV
             fi
-          done
+          done < .github/env_vars.txt
           echo "build_approved=$build_approved" >> $GITHUB_OUTPUT
 
   build-and-deploy:
