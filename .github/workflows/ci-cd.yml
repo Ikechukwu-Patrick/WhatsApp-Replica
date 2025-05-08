@@ -49,7 +49,7 @@ jobs:
             echo "❌ Invalid JSON detected in env_vars"
             exit 1
           fi
-          
+
           echo "env_vars=$(jq -c . env_vars.json)" >> $GITHUB_ENV
 
       - name: Validate Secrets
@@ -86,10 +86,13 @@ jobs:
   build-and-deploy:
     name: Build & Deploy
     needs: secret-management
-    if: needs.secret-management.outputs.build_approved == 'true'
+    if: ${{ success() && needs.secret-management.outputs.build_approved == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Show approved value
+        run: echo "build_approved = ${{ needs.secret-management.outputs.build_approved }}"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v3
@@ -105,19 +108,18 @@ jobs:
             whatsappclone/target
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
 
-      - name: Build with Maven
-        working-directory: whatsappclone
-        run: mvn clean package -DskipTests
-
-      - name: Inject secret.properties if needed
+      - name: Inject secret.properties
         run: |
           mkdir -p whatsappclone/src/main/resources
           cat <<EOF > whatsappclone/src/main/resources/secret.properties
-          # Inject secrets from GitHub Secrets
           DB_PASSWORD=${{ secrets.DB_PASSWORD }}
           API_KEY=${{ secrets.API_KEY }}
           # Add more variables as needed
           EOF
+
+      - name: Build with Maven
+        working-directory: whatsappclone
+        run: mvn clean package -DskipTests
 
       - name: Verify JAR
         run: |
@@ -126,5 +128,3 @@ jobs:
           timeout 60 bash -c 'while ! curl -s http://localhost:8080/actuator/health | grep -q '"'"'"status":"UP"'"'"'; do sleep 2; done' || { echo "::error::Application failed to start"; kill $APP_PID || true; exit 1; }
           curl -s http://localhost:8080/actuator/health | jq .
           kill $APP_PID || true
-
-#          vgihioijpk
