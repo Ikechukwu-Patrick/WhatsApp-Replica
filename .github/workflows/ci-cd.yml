@@ -126,3 +126,5 @@ jobs:
           timeout 60 bash -c 'while ! curl -s http://localhost:8080/actuator/health | grep -q '"'"'"status":"UP"'"'"'; do sleep 2; done' || { echo "::error::Application failed to start"; kill $APP_PID || true; exit 1; }
           curl -s http://localhost:8080/actuator/health | jq .
           kill $APP_PID || true
+
+#          vgihioijpk
