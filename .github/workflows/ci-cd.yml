@@ -43,43 +43,59 @@ jobs:
           sudo apt update
           sudo apt install gh -y
 
-      - name: Authenticate GitHub CLI
+      - name: Sync Environment Secrets to GitHub
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "${GH_TOKEN}" | gh auth login --with-token
-
-      - name: Sync Environment Secrets
         run: |
-          #!/bin/bash
           set -eo pipefail
           REPO_OWNER=$(gh repo view --json owner -q '.owner.login')
           REPO_NAME=$(gh repo view --json name -q '.name')
           TEMP_DIR=$(mktemp -d)
           LOG_FILE="$TEMP_DIR/sync-secrets.log"
-
-          cleanup() { rm -rf "$TEMP_DIR"; }
+          cleanup() {
+            rm -rf "$TEMP_DIR"
+          }
           trap cleanup EXIT
-
           log() {
             echo "$(date +'%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
           }
-
           log "🔍 Starting secret synchronization for $REPO_OWNER/$REPO_NAME"
+          log "Scanning repository for environment variable patterns..."
+          find . -type f \( \
+            -name "*.js" -o \
+            -name "*.ts" -o \
+            -name "*.java" -o \
+            -name "*.kt" -o \
+            -name "*.py" -o \
+            -name "*.go" -o \
+            -name "*.rs" -o \
+            -name "*.php" -o \
+            -name "*.properties" -o \
+            -name "*.yml" -o \
+            -name "*.yaml" -o \
+            -name ".env*" \
+          \) ! -path "./node_modules/*" ! -path "./.git/*" -exec grep -Eho \
+          '\$\{[A-Z0-9_]+\}|@Value\("\\$\\{[A-Z0-9_]+\\}"|process\.env\.[A-Z0-9_]+|env\.[A-Z0-9_]+|os\.getenv\(["'"'"'][A-Z0-9_]+' {} + | \
+          grep -oE '[A-Z0-9_]+' | \
+          sort -u > "$TEMP_DIR/code_vars.txt"
 
-          find . -type f \( -name "*.js" -o -name "*.ts" -o -name "*.java" -o -name "*.kt" -o -name "*.py" -o -name "*.go" -o -name "*.rs" -o -name "*.php" -o -name "*.properties" -o -name "*.yml" -o -name "*.yaml" -o -name ".env*" \) ! -path "./node_modules/*" ! -path "./.git/*" -exec grep -Eho '\$\{[A-Z0-9_]+\}|@Value\("\\$\\{[A-Z0-9_]+\\}"|process\.env\.[A-Z0-9_]+|env\.[A-Z0-9_]+|os\.getenv\(["'"'"'][A-Z0-9_]+' {} + | grep -oE '[A-Z0-9_]+' | sort -u > "$TEMP_DIR/code_vars.txt"
+          if [ ! -s "$TEMP_DIR/code_vars.txt" ]; then
+            log "❌ No environment variables found in the code."
+            exit 0
+          fi
 
+          log "Extracting variables from .env files..."
           for env_file in .env*; do
             [ -f "$env_file" ] && grep -v '^#' "$env_file" | grep -v '^$' | sed 's/ *= */=/' | cut -d '=' -f1 >> "$TEMP_DIR/code_vars.txt"
           done
-
           sort -u "$TEMP_DIR/code_vars.txt" -o "$TEMP_DIR/code_vars.txt"
           var_count=$(wc -l < "$TEMP_DIR/code_vars.txt")
-
           log "✅ Found $var_count unique environment variables in the repository."
 
+          log "Fetching existing secrets..."
           gh secret list --json name | jq -r '.[].name' | sort > "$TEMP_DIR/gh_secrets.txt"
-          comm -23 "$TEMP_DIR/code_vars.txt" "$TEMP_DIR/gh_secrets.txt" > "$TEMP_DIR/missing.txt"
 
+          comm -23 "$TEMP_DIR/code_vars.txt" "$TEMP_DIR/gh_secrets.txt" > "$TEMP_DIR/missing.txt"
           if [ ! -s "$TEMP_DIR/missing.txt" ]; then
             log "✅ All environment variables are properly secured in GitHub Secrets."
             exit 0
@@ -96,12 +112,10 @@ jobs:
             for env_file in .env.production .env .env.*; do
               [ -f "$env_file" ] && value=$(grep -m1 "^$var=" "$env_file" | cut -d '=' -f2-) && break
             done
-
             if [ -z "$value" ]; then
               value="PLACEHOLDER_$(openssl rand -hex 8)"
               log "ℹ️ Using generated placeholder for $var"
             fi
-
             if gh secret set "$var" --body "$value"; then
               log "✅ Added $var to GitHub Secrets"
             else
@@ -109,24 +123,11 @@ jobs:
               exit 1
             fi
           done < "$TEMP_DIR/missing.txt"
-
           log "🎉 Secret synchronization complete!"
-          echo "🔗 https://github.com/$REPO_OWNER/$REPO_NAME/settings/secrets/actions"
-
-      - name: Wait for PostgreSQL to be ready
-        run: |
-          for i in {1..10}; do
-            if pg_isready -h localhost -p 5432 > /dev/null 2>&1; then
-              echo "✅ PostgreSQL is ready"
-              break
-            fi
-            echo "⏳ Waiting for PostgreSQL ($i)..."
-            sleep 5
-          done
+          log "🔗 https://github.com/$REPO_OWNER/$REPO_NAME/settings/secrets/actions"
 
       - name: Build app
         run: ./gradlew clean build
 
       - name: Deploy app
         run: echo "🚀 Deploying..."
-
