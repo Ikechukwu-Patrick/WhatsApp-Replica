@@ -5,8 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="747b283e-5f77-4b0c-b787-01870b11f85d" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.github/workflows/ci-cd.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.github/workflows/ci-cd.yml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whatsappclone/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/whatsappclone/src/main/resources/application.properties" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -208,6 +208,8 @@
       <workItem from="1741967934610" duration="145000" />
       <workItem from="1742386974393" duration="221000" />
       <workItem from="1743080557373" duration="2438000" />
+      <workItem from="1743177326835" duration="4281000" />
+      <workItem from="1744613360605" duration="11846000" />
     </task>
     <servers />
   </component>
