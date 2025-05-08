@@ -72,6 +72,9 @@ jobs:
             echo "ready=true" >> $GITHUB_OUTPUT
           fi
 
+      - name: Debug Secret Validation Output
+        run: echo "build_approved = ${{ steps.validate-secrets.outputs.ready }}"
+
       - name: Auto-Add Missing Secrets
         if: steps.validate-secrets.outputs.ready == 'false'
         run: |
@@ -90,6 +93,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check build approval status
+        run: echo "🚦 Build approved? -> ${{ needs.secret-management.outputs.build_approved }}"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v3
